@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %} Пломбы / посылко-места к отгрузке в манифест {{parcel_plomb_numb}}  {% endblock %}</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+<div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+ {% endif %}
+  {% endfor %}
+{% endwith %}
+    <span class="badge badge-primary"> CEL Logistic </span>
+   <p>
+    <form action="{{ url_for('save_manifest', partner='CEL') }}" method="get">
+    <input type="submit" value="Сформировать Манифест" />
+  </form>
+<p>
+    <form action="{{ url_for('save_manifest', partner='GBS') }}" method="get">
+    <input type="submit" value="Манифест GBS / Трансатлантик" />
+  </form>
+    <p>
+   <form action="{{ url_for('clean_working_place_manifest') }}" method="post">
+    <input type="submit" value="Очистить таблицу" />
+  </form>
+    <p>
+        <form action="{{ url_for('plomb_to_manifest') }}" method="post">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" onload='this.click();' autofocus/>
+    <input type="submit" value="Добавить" />
+  </form>
+    <p>{% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+    <p>
+
+{% endfor %}
+
+{% endblock %}

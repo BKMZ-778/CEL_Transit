@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<a href="#">Админка</a>
+    <h1>{% block title %} Общая информация {% endblock %}</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+    <dt> Посмотреть объект:
+<form action="{{ url_for('object_info') }}" method="post">
+    <input type="search" name="numb" value="" onload='this.click();' autofocus/>
+    <input type="submit" value="Найти" />
+  </form>
+<p>
+
+    <dt> Партии в системе: <dt>
+{% for row in parties %}
+        <a href="{{ url_for('party_info', row=row)}} ">
+            <h2>{{ row }}</h2>
+        </a>
+        <hr>
+    {% endfor %}
+{% endblock %}

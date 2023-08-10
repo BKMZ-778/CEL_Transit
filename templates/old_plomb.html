@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title>Изменить пломбу</title>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+<div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+ {% endif %}
+  {% endfor %}
+{% endwith %}
+<body>
+<dl>
+ <dt>
+</dl>
+<dl>
+ <dt>
+</dl>
+<form action="{{ url_for('old_plomb_add') }}" method="post">
+        <label for="name"> Старая пломба:</label>
+    <input type="text" id="name" name="old_plomb_numb" required minlength="1" size="15" value="" onload='this.click();' autofocus >
+    <p> </p>
+    <label for="name1"> Новая пломба: </label>
+    <input type="text" id="name1" name="new_plomb_numb" required minlength="1" size="15" value=""/>
+    <input type="submit" value="Search" />
+    </form>
+
+<p> </p>
+    <p> {% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+        {% endfor %} </p>
+
+{% endblock %}
