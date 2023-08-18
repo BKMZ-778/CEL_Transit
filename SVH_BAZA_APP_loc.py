@@ -672,31 +672,37 @@ def load_sample_manifest():
                                                     );
                                                 """)
                 df_to_append = pd.DataFrame()
-                for parcel_numb in df['parcel_numb']:
-                    row_isalready_in = pd.read_sql(f"Select * from baza where parcel_numb = '{parcel_numb}'", con)
-                    row = df.loc[df['parcel_numb'] == parcel_numb]
-                    if row_isalready_in.empty:
-                        df_to_append = df_to_append.append(row)
-                        logger.warning(row)
-                    else:
-                        goods = df.loc[df['parcel_numb'] == parcel_numb]['goods'].values[0]
-                        logger.warning(goods)
-                        party_numb_in_base = row_isalready_in['party_numb'].values[0]
-                        if party_numb_in_base is None:
-                            party_numb = df.loc[df['parcel_numb'] == parcel_numb]['party_numb'].values[0]
-                            parcel_plomb_numb = str(df.loc[df['parcel_numb'] == parcel_numb]['parcel_plomb_numb'].values[0])
-                            parcel_weight = df.loc[df['parcel_numb'] == parcel_numb]['parcel_weight'].values[0]
-                            con.execute("Update baza set goods = ?, "
-                                        "party_numb = ?, "
-                                        "parcel_plomb_numb = ?,"
-                                        "parcel_weight = ?"
-                                        "where parcel_numb = ?",
-                                        (goods, party_numb, parcel_plomb_numb, parcel_weight, parcel_numb))
+                party_numb = df['party_numb'].values[0]
+                party_numb_isalready_in = pd.read_sql(f"Select party_numb from baza where party_numb = '{party_numb}'", con)
+                if party_numb_isalready_in.empty:
+                    df.to_sql('baza', con=con, if_exists='append', index=False)
+                else:
+                    for parcel_numb in df['parcel_numb']:
+                        row_isalready_in = pd.read_sql(f"Select * from baza where parcel_numb = '{parcel_numb}'", con)
+                        row = df.loc[df['parcel_numb'] == parcel_numb]
+                        if row_isalready_in.empty:
+                            df_to_append = df_to_append.append(row)
+                            logger.warning(row)
                         else:
-                            con.execute("Update baza set goods = ? where parcel_numb = ?",
-                                        (goods, parcel_numb))
-                logger.warning(df_to_append)
-                df_to_append.to_sql('baza', con=con, if_exists='append', index=False)
+                            goods = df.loc[df['parcel_numb'] == parcel_numb]['goods'].values[0]
+                            logger.warning(goods)
+
+                            party_numb_in_base = row_isalready_in['party_numb'].values[0]
+                            if party_numb_in_base is None:
+                                party_numb = df.loc[df['parcel_numb'] == parcel_numb]['party_numb'].values[0]
+                                parcel_plomb_numb = str(df.loc[df['parcel_numb'] == parcel_numb]['parcel_plomb_numb'].values[0])
+                                parcel_weight = df.loc[df['parcel_numb'] == parcel_numb]['parcel_weight'].values[0]
+                                con.execute("Update baza set goods = ?, "
+                                            "party_numb = ?, "
+                                            "parcel_plomb_numb = ?,"
+                                            "parcel_weight = ?"
+                                            "where parcel_numb = ?",
+                                            (goods, party_numb, parcel_plomb_numb, parcel_weight, parcel_numb))
+                            else:
+                                con.execute("Update baza set party_numb = ?, goods = ? where parcel_numb = ?",
+                                            (party_numb, goods, parcel_numb))
+                    logger.warning(df_to_append)
+                    df_to_append.to_sql('baza', con=con, if_exists='append', index=False)
                 flash(f'Шаблон загружен')
                 winsound.PlaySound('Snd\sample_load.wav', winsound.SND_FILENAME)
     return render_template('add_manifest_sample.html')
@@ -716,6 +722,10 @@ def load_decisions():
             df = pd.read_excel(filename, sheet_name=0, engine='openpyxl')
             df['Вес брутто'] = df['Вес брутто'].replace(',', '.', regex=True).astype(float)
             df['Статус_ТО'] = df['Статус ТО']
+            df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='10-в',
+                                                      value='В', regex=True)
+            df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='32-в',
+                                                      value='В', regex=True)
             df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='Выпуск товаров без уплаты таможенных платежей', value='ВЫПУСК', regex=True)
             df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='Выпуск товаров разрешен, таможенные платежи уплачены', value='ВЫПУСК', regex=True)
             for cel in df['Статус_ТО']:
@@ -787,6 +797,31 @@ def load_decisions():
                 df_to_append.to_sql('baza', con=con, if_exists='append', index=False)
                 flash(f'Решения загружены')
                 winsound.PlaySound('Snd\esheniya_zagruzhenu.wav', winsound.SND_FILENAME)
+            try:
+                df_vector = pd.read_excel(filename, sheet_name=0, engine='openpyxl')
+                df_vector = df_vector[['Общая накладная', 'Трек-номер', 'Последняя миля', 'Статус ТО']]
+                df_vector = df_vector.rename(columns={'Общая накладная': 'party_numb', 'Трек-номер': 'parcel_numb', 'Последняя миля': 'vector', 'Статус ТО': 'custom_status_short'})
+                con = sl.connect('VECTORS.db')
+                with con:
+                    baza = con.execute("select count(*) from sqlite_master where type='table' and name='vectors'")
+                    for row in baza:
+                        # если таких таблиц нет
+                        if row[0] == 0:
+                            # создаём таблицу
+                            with con:
+                                con.execute("""
+                                                            CREATE TABLE vectors (
+                                                            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                                            party_numb VARCHAR(20),
+                                                            parcel_numb VARCHAR(20) NOT NULL UNIQUE ON CONFLICT REPLACE,
+                                                            vector,
+                                                            custom_status_short
+                                                            );
+                                                        """)
+                    df_vector.to_sql('vectors', con=con, if_exists='append', index=False)
+                flash(f'Инфо по последней миле загружена')
+            except:
+                flash(f'Нет инфо по последней миле')
     return render_template('add_decisions.html')
 
 @app_svh.route('/plomb', methods=['GET'])
@@ -1208,7 +1243,7 @@ def manifest_to_xls(df_manifest_total):
                                          'parcel_plomb_numb', 'Вес мешка'])
 
     df_total = df_total.drop_duplicates(subset='Трекинг', keep='first')
-
+    total_weight = df_manifest_total['parcel_weight'].sum()
 
 
     writer = pd.ExcelWriter('system.xlsx', engine='xlsxwriter')
@@ -1256,8 +1291,8 @@ def manifest_to_xls(df_manifest_total):
     ws2[f"E{len_A}"] = ws2[f"E{len_A}"].number_format = '0.000'
     ws2[f"E{len_A}"] = f"=SUM(E4:E{len_A - 1})"
     ws2[f"F{len_A}"] = quont_of_plomb
-    Manifest_name = f'{download_folder}Manifest {party_numb} мест {quont_of_plomb} - {now_time}.xlsx'
-    Manifest_name_short_name = f'МАНИФЕСТ ОТГРУЗКИ {party_numb} мест {quont_of_plomb} - {now_time})'
+    Manifest_name = f'{download_folder}Manifest {party_numb} pacs-{quont_of_plomb} ({total_weight} kg) - {now_time}.xlsx'
+    Manifest_name_short_name = f'МАНИФЕСТ ОТГРУЗКИ {party_numb} мест {quont_of_plomb} ({total_weight} кг) - {now_time}'
     wb2.save(Manifest_name)
 
     send_mail(Manifest_name, Manifest_name_short_name)
@@ -1316,7 +1351,7 @@ def manifest_to_xls(df_manifest_total):
     ws2.page_setup.fitToHeight = False
     cm = int(1 / 4)
     ws2.page_margins = PageMargins(left=cm, right=cm, top=cm, bottom=cm)
-    Manifest_name2 = f'{download_folder} TTN {party_numb} мест {quont_of_plomb} - {now_time}.xlsx'
+    Manifest_name2 = f'{download_folder}TTN {party_numb} мест {quont_of_plomb} - {now_time}.xlsx'
     Manifest_name_short_name2 = f'ТТН {party_numb} мест {quont_of_plomb} - {now_time})'
     wb2.save(Manifest_name2)
     #send_mail(Manifest_name2, Manifest_name_short_name2)
@@ -1379,8 +1414,8 @@ def manifest_to_xls_GBS(df_manifest_total):
                                                           'parcel_plomb_numb': 'Пломба'
                                                           })
 
-    Manifest_name = f'{download_folder} GBS Готово к выдачи {party_numb} мест {quont_of_plomb} к {now_nextday}).xlsx'
-    Manifest_name_short_name = f'МАНИФЕСТ ОТГРУЗКИ GBS {party_numb} мест {quont_of_plomb} к {now_nextday}'
+    Manifest_name = f'{download_folder}GBS Manifest {party_numb} pacs-{quont_of_plomb} ({weight_total} kg) to {now_nextday}.xlsx'
+    Manifest_name_short_name = f'МАНИФЕСТ ОТГРУЗКИ GBS {party_numb} мест {quont_of_plomb} ({weight_total} кг) к {now_nextday}'
 
     writer = pd.ExcelWriter(Manifest_name, engine='xlsxwriter')
     df_manifest_total.to_excel(writer, sheet_name='Sheet1', index=False)

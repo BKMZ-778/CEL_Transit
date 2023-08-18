@@ -296,7 +296,6 @@ def get_parcel_info_API():
 @app_svh.route('/api/get_decisions_TSD', methods=['POST'])
 def get_parcel_info_API_TSD():
     parcel_details = request.get_json()
-    print(parcel_details)
     parcel_numb = parcel_details['parcel_numb']
     con = sl.connect('BAZA.db')
     try:
@@ -305,17 +304,18 @@ def get_parcel_info_API_TSD():
             data = con.execute(query_party_numb).fetchone()
             for row in data:
                 print(row)
-            query = f"SELECT party_numb, parcel_numb, parcel_plomb_numb, custom_status_short, custom_status, decision_date, refuse_reason from baza where party_numb = '{row}'"
+                party_numb = row
+            query = f"SELECT party_numb, parcel_numb, parcel_plomb_numb, custom_status_short, custom_status, decision_date, refuse_reason from baza where party_numb = '{party_numb}'"
             data = con.execute(query).fetchall()
             for row in data:
                 print(row)
             df_decisions = pd.read_sql(query, con)
-            print(df_decisions)
             df_decisions = df_decisions.loc[:, ~df_decisions.columns.duplicated()].copy()
             writer = pd.ExcelWriter('df_decisions.xlsx', engine='xlsxwriter')
             df_decisions.to_excel(writer, sheet_name='Sheet1', index=False)
             writer.save()
     except Exception as e:
+        print(e)
         return {'message': str(e)}, 400
 
     return Response(df_decisions.to_json(orient="records", indent=2), mimetype='application/json')
@@ -403,7 +403,7 @@ def fechone_plomb():
     con = sl.connect('BAZA.db')
     con.row_factory = sl.Row
     with con:
-        data = pd.read_sql("Select * from baza", con)
+        data = pd.read_sql("Select DISTINCT ID, party_numb from baza", con)
         data = data.sort_values(by='ID', ascending=False)
         parties = data.drop_duplicates(subset='party_numb')['party_numb']
         parties = parties.fillna(value=np.nan)
@@ -532,31 +532,37 @@ def load_sample_manifest():
                                                     );
                                                 """)
                 df_to_append = pd.DataFrame()
-                for parcel_numb in df['parcel_numb']:
-                    row_isalready_in = pd.read_sql(f"Select * from baza where parcel_numb = '{parcel_numb}'", con)
-                    row = df.loc[df['parcel_numb'] == parcel_numb]
-                    if row_isalready_in.empty:
-                        df_to_append = df_to_append.append(row)
-                        logger.warning(row)
-                    else:
-                        goods = df.loc[df['parcel_numb'] == parcel_numb]['goods'].values[0]
-                        logger.warning(goods)
-                        party_numb_in_base = row_isalready_in['party_numb'].values[0]
-                        if party_numb_in_base is None:
-                            party_numb = df.loc[df['parcel_numb'] == parcel_numb]['party_numb'].values[0]
-                            parcel_plomb_numb = df.loc[df['parcel_numb'] == parcel_numb]['parcel_plomb_numb'].values[0]
-                            parcel_weight = df.loc[df['parcel_numb'] == parcel_numb]['parcel_weight'].values[0]
-                            con.execute("Update baza set goods = ?, "
-                                        "party_numb = ?, "
-                                        "parcel_plomb_numb = ?,"
-                                        "parcel_weight = ?"
-                                        "where parcel_numb = ?",
-                                        (goods, party_numb, parcel_plomb_numb, parcel_weight, parcel_numb))
+                party_numb = df['party_numb'].values[0]
+                party_numb_isalready_in = pd.read_sql(f"Select party_numb from baza where party_numb = '{party_numb}'",
+                                                      con)
+                if party_numb_isalready_in.empty:
+                    df.to_sql('baza', con=con, if_exists='append', index=False)
+                else:
+                    for parcel_numb in df['parcel_numb']:
+                        row_isalready_in = pd.read_sql(f"Select * from baza where parcel_numb = '{parcel_numb}'", con)
+                        row = df.loc[df['parcel_numb'] == parcel_numb]
+                        if row_isalready_in.empty:
+                            df_to_append = df_to_append.append(row)
+                            logger.warning(row)
                         else:
-                            con.execute("Update baza set goods = ? where parcel_numb = ?",
-                                        (goods, parcel_numb))
-                logger.warning(df_to_append)
-                df_to_append.to_sql('baza', con=con, if_exists='append', index=False)
+                            goods = df.loc[df['parcel_numb'] == parcel_numb]['goods'].values[0]
+                            logger.warning(goods)
+                            party_numb_in_base = row_isalready_in['party_numb'].values[0]
+                            if party_numb_in_base is None:
+                                party_numb = df.loc[df['parcel_numb'] == parcel_numb]['party_numb'].values[0]
+                                parcel_plomb_numb = df.loc[df['parcel_numb'] == parcel_numb]['parcel_plomb_numb'].values[0]
+                                parcel_weight = df.loc[df['parcel_numb'] == parcel_numb]['parcel_weight'].values[0]
+                                con.execute("Update baza set goods = ?, "
+                                            "party_numb = ?, "
+                                            "parcel_plomb_numb = ?,"
+                                            "parcel_weight = ?"
+                                            "where parcel_numb = ?",
+                                            (goods, party_numb, parcel_plomb_numb, parcel_weight, parcel_numb))
+                            else:
+                                con.execute("Update baza set party_numb = ?, goods = ? where parcel_numb = ?",
+                                            (party_numb, goods, parcel_numb))
+                    logger.warning(df_to_append)
+                    df_to_append.to_sql('baza', con=con, if_exists='append', index=False)
                 flash(f'Шаблон загружен')
     return render_template('add_manifest_sample.html')
 
@@ -575,6 +581,10 @@ def load_decisions():
             df = pd.read_excel(filename, sheet_name=0, engine='openpyxl')
             df['Вес брутто'] = df['Вес брутто'].replace(',', '.', regex=True).astype(float)
             df['Статус_ТО'] = df['Статус ТО']
+            df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='10-в',
+                                                      value='В', regex=True)
+            df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='32-в',
+                                                      value='В', regex=True)
             df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='Выпуск товаров без уплаты таможенных платежей', value='ВЫПУСК', regex=True)
             df['Статус_ТО'] = df['Статус_ТО'].replace(to_replace='Выпуск товаров разрешен, таможенные платежи уплачены', value='ВЫПУСК', regex=True)
             for cel in df['Статус_ТО']:
