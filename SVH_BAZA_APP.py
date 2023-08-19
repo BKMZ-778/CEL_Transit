@@ -293,6 +293,7 @@ def get_parcel_info_API():
 
     return Response(df_decisions.to_json(orient="records", indent=2), mimetype='application/json')
 
+
 @app_svh.route('/api/get_decisions_TSD', methods=['POST'])
 def get_parcel_info_API_TSD():
     parcel_details = request.get_json()
@@ -302,13 +303,24 @@ def get_parcel_info_API_TSD():
         with con:
             query_party_numb = f"SELECT party_numb from baza where parcel_numb = '{parcel_numb}'"
             data = con.execute(query_party_numb).fetchone()
-            for row in data:
-                print(row)
-                party_numb = row
-            query = f"SELECT party_numb, parcel_numb, parcel_plomb_numb, custom_status_short, custom_status, decision_date, refuse_reason from baza where party_numb = '{party_numb}'"
-            data = con.execute(query).fetchall()
-            for row in data:
-                print(row)
+            if data is not None:
+                for row in data:
+                    print(row)
+                    party_numb = row
+                query = f"SELECT party_numb, parcel_numb, parcel_plomb_numb, custom_status_short, custom_status, decision_date, refuse_reason from baza where party_numb = '{party_numb}'"
+                data = con.execute(query).fetchall()
+                for row in data:
+                    print(row)
+            else:
+                query_party_numb = f"SELECT party_numb from baza where parcel_plomb_numb = '{parcel_numb}'"
+                data = con.execute(query_party_numb).fetchone()
+                for row in data:
+                    print(row)
+                    party_numb = row
+                query = f"SELECT party_numb, parcel_numb, parcel_plomb_numb, custom_status_short, custom_status, decision_date, refuse_reason from baza where party_numb = '{party_numb}'"
+                data = con.execute(query).fetchall()
+                for row in data:
+                    print(row)
             df_decisions = pd.read_sql(query, con)
             df_decisions = df_decisions.loc[:, ~df_decisions.columns.duplicated()].copy()
             writer = pd.ExcelWriter('df_decisions.xlsx', engine='xlsxwriter')

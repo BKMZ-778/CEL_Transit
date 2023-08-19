@@ -8,6 +8,7 @@ import logging
 import openpyxl
 from copy import copy
 from openpyxl.utils.cell import range_boundaries
+
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.styles import Font
 from openpyxl.styles import Alignment
@@ -200,7 +201,11 @@ def returnAudioFile():
        attachment_filename="SndNoPlomb.wav")
 
 def insert_user_action(object_name, comment):
-    user_id = request.cookies.get('user_id')
+    try:
+        user_id = request.cookies.get('user_id')
+    except:
+        user_id = "API"
+    print(user_id)
     now_time = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
     con = sl.connect('BAZA-reports.db')
     with con:
@@ -293,6 +298,25 @@ def insert_event_API_test(df, event_date):
             return response.json()
         except ValueError:
             pass
+
+@app_svh.route('/api/del_plomb_TSD', methods=['POST'])
+def api_del_plomb_TSD():
+    parcel_details = request.get_json()
+    parcel_plomb_numb = parcel_details['parcel_plomb_numb']
+    con = sl.connect('BAZA.db')
+    print(parcel_plomb_numb)
+    try:
+        with con:
+            con.execute(f"Update baza set VH_status = 'На ВХ', parcel_plomb_numb = ''  where parcel_plomb_numb = '{parcel_plomb_numb}' and custom_status_short = 'ИЗЪЯТИЕ'")
+            print('ok')
+        #object_name = parcel_numb
+        #logger.warning(object_name)
+        #comment = 'TSD: Завершено место с посылкой на изъятие'
+        #insert_user_action(object_name, comment)
+    except Exception as e:
+        print(e)
+        return {'message': str(e)}, 400
+    return jsonify('True')
 
 @app_svh.route('/api/update_decisions/<party_numb>', methods=['POST', 'GET'])
 def API_update_decisions(party_numb):
@@ -1243,7 +1267,7 @@ def manifest_to_xls(df_manifest_total):
                                          'parcel_plomb_numb', 'Вес мешка'])
 
     df_total = df_total.drop_duplicates(subset='Трекинг', keep='first')
-    total_weight = df_manifest_total['parcel_weight'].sum()
+    total_weight = df_manifest_total['parcel_weight'].sum().round(3)
 
 
     writer = pd.ExcelWriter('system.xlsx', engine='xlsxwriter')
@@ -1401,7 +1425,7 @@ def manifest_to_xls_GBS(df_manifest_total):
 
     quont_of_plomb = len(df_manifest_total.drop_duplicates(subset='parcel_plomb_numb'))
     quont_of_parc = len(df_manifest_total.drop_duplicates(subset='parcel_numb'))
-    weight_total = df_manifest_total['parcel_weight'].sum()
+    weight_total = df_manifest_total['parcel_weight'].sum().round(3)
     print(df_manifest_total)
     df_manifest_total = df_manifest_total.loc[:, ~df_manifest_total.columns.duplicated()].copy()
     print(df_manifest_total)
@@ -1744,7 +1768,7 @@ def create_pallet():
             except:
                 pass
         object_name = parcel_plomb_numb_np
-        comment = f'Сформировать новый паллет: пломба отмечена для добавления на паллет'
+        comment = f'Сформировать новый паллет: пломба отмечена для добавления на паллет №{i}'
         insert_user_action(object_name, comment)
     except Exception as e:
         flash(f'Пломба не найдена!', category='error')
@@ -2031,7 +2055,7 @@ def pallet_info_callback_refuses():
     global pallet
     con = sl.connect('BAZA.db')
     with con:
-        con.execute(f"Update baza set pallet = '0' where pallet = '{pallet}' AND custom_status_short = 'ИЗЪЯТИЕ'")
+        con.execute(f"Update baza set pallet = '0', parcel_plomb_numb = '' where pallet = '{pallet}' AND custom_status_short = 'ИЗЪЯТИЕ'")
         print('updated')
         object_name = pallet
         comment = f'Отвязанны посылки с изъятием от паллета'
