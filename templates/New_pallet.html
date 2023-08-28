@@ -2,6 +2,10 @@
 
 {% block content %}
     <h2>{% block title %} {{parcel_plomb_numb_np}} {% endblock %}</h2>
+Кол-во:
+<p style="font-size:40px"> {{quont_plombs}}</p>
+
+
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for category, message in messages %}
 {% if category == 'error' %}

@@ -242,4 +242,16 @@ def test_API():
         print(response)
 
 
-test_API()
+def update_data():
+    con = sl.connect('BAZA.db')
+    lis_parc_numb = pd.read_excel('list_upd.xlsx', header=None, engine='openpyxl')
+    print(lis_parc_numb)
+    with con:
+        i = 0
+        for parcel_numb in lis_parc_numb[0]:
+            i += 1
+            print(parcel_numb)
+            con.execute(f"Update baza set pallet = 194 where parcel_plomb_numb = '{parcel_numb}'")
+            print(i)
+
+update_data()

@@ -1,15 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<dt> Приемка {{party_numb}}, всего: {{quont_all_plombs}}:
+<dt> Приемка {{party_numb}},
     <p>
-    <p> Принято {{quont_plomb_done}}
-    <p> Осталось {{quon_not_done}}
-<form action="{{ url_for('get_plomb_come_work', party_numb=party_numb) }}" method="post">
-    <input type="search" name="parcel_plomb_numb" value="" onload='this.click();' autofocus/>
-    <input type="submit" value="Найти" />
-  </form>
-{% with messages = get_flashed_messages(with_categories=true) %}
+    Пломба {{parcel_plomb_numb}}
+    <p style="font-size:32px"> Принято {{quont_plomb_done}} из {{quont_all_plombs}}</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
   {% for category, message in messages %}
 {% if category == 'error' %}
         <div class="{{ category }}" style="border: 1px solid #FF4343;
@@ -21,6 +17,11 @@
     {% endif %}
   {% endfor %}
 {% endwith %}
+<form action="{{ url_for('get_plomb_come_work', party_numb=party_numb) }}" method="post">
+    <input type="search" name="parcel_plomb_numb" value="" onload='this.click();' autofocus/>
+    <input type="submit" value="Найти" />
+  </form>
+
 <p>{% for table in tables %}
             {{titles[loop.index]}}
             {{ table|safe }}
