@@ -730,7 +730,7 @@ def load_sample_manifest():
             df_track = df_track.rename(columns={'Номер отправления ИМ': 'parcel_numb',
                                     'Номер накладной СДЭК': 'track_numb'})
             print(df_track)
-            if df_track['track_numb'].str.contains('#н/д').any() or df_track['track_numb'].isnull().any():
+            if df_track['track_numb'].astype(str).str.contains('#н/д').any() or df_track['track_numb'].isnull().any():
                 flash(f'Ошибка загрузки треков: В колонке Треков есть пустые значения или #н/д, поправьте и загрузите заново', category='error')
             else:
                 con_track = sl.connect('TRACKS.db')
@@ -1385,7 +1385,6 @@ def manifest_to_xls(df_manifest_total):
 
         df_total = df_total.drop_duplicates(subset='Трекинг', keep='first')
         total_weight = df_manifest_total['parcel_weight'].sum().round(3)
-
 
         writer = pd.ExcelWriter('system.xlsx', engine='xlsxwriter')
         df_total.to_excel(writer, sheet_name='Sheet1', index=False)
