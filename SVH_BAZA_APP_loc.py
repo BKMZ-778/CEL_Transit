@@ -40,7 +40,7 @@ from flask_jwt_extended import (
 from schemas import VideoSchema, UserSchema, AuthSchema
 import winsound
 from apscheduler.schedulers.background import BackgroundScheduler
-
+d='ds'
 download_folder = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/'
 download_folder_allmanif = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ'
 addition_folder = f'{download_folder}Места-Паллеты/'
