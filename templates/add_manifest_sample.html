@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+<title> Загрузить Шаблон Манифеста </title>
+
+<body>
+    <h1>Загрузить Шаблон Манифеста</h1>
+
+    <form method="POST" action="{{ url_for('load_sample_manifest')}}" enctype="multipart/form-data">
+      <p><input type="file" name="file" accept=".xls, .xlsx,"></p>
+        <p> </p>
+        <p><input type="submit" value="Ок"></p>
+    </form>
+
+    <h1>Загрузить треки</h1>
+    <form method="POST" action="{{ url_for('load_tracks')}}" enctype="multipart/form-data">
+      <p><input type="file" name="file" accept=".xls, .xlsx,"></p>
+        <p> </p>
+        <p><input type="submit" value="Ок"></p>
+    </form>
+        <h1>Загрузить Направления</h1>
+    <form method="POST" action="{{ url_for('load_vectors')}}" enctype="multipart/form-data">
+      <p><input type="file" name="file" accept=".xls, .xlsx,"></p>
+        <p> </p>
+        <p><input type="submit" value="Ок"></p>
+    </form>
+{% endblock %}

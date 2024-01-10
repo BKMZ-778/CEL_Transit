@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Модальное окно</title>
+</head>
+<body>
+    <h1>Пример модального окна</h1>
+    <button onclick="openModal()">Открыть модальное окно</button>
+
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">×</span>
+            <p>Это модальное окно!</p>
+        </div>
+    </div>
+
+    <script>
+        function openModal() {
+            var modal = document.getElementById("myModal");
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            var modal = document.getElementById("myModal");
+            modal.style.display = "none";
+        }
+    </script>
+</body>
+</html>

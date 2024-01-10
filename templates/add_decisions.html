@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title> Загрузка решений </title>
+<body>
+    <h1>Загрузить Решения</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+<span style="border: 1px solid #00ff00;
+    background: #82e285;"> {{ message }} </span>
+  {% endfor %}
+{% endwith %}
+    <p> </p>
+    <form method="POST" action="{{ url_for('load_decisions')}}" enctype="multipart/form-data">
+      <p><input type="file" name="file" accept=".xls, .xlsx,"></p>
+        <p> </p>
+        <p><input type="submit" value="Ок"></p>
+    </form>
+<p> </p>
+    <a class="navbar-brand" href="{{ url_for('load_sample_manifest')}}">Загрузить Шаблон Манифеста</a>
+{% endblock %}

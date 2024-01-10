@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %} Партия {{party_numb}}  {{row}}
+        {% endblock %}</h2>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+<p>
+    <p> Всего пломб: {{quonty_plomb}} на изъятие: {{quonty_plomb_refuse}}
+<p>
+    <p> Всего Посылок: {{quonty_parcels}} на изъятие: {{quonty_parcels_refuse}}
+   <form action="{{ url_for('party_info_refuses_excel', row=row) }}" method="post">
+    <input type="submit" value="Выгрузить в Excel" />
+  </form>
+<p>
+<form action="{{ url_for('check_refuses', row=row) }}" method="post">
+    <input type="submit" value="Просканировать изъятия по партии" />
+  </form>
+<p> {% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+        {% endfor %} </p>
+
+{% endblock %}

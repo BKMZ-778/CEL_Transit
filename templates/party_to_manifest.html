@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %} Отгрузка партии {% endblock %}</h2>
+
+<dt> Партия
+    <form action="{{ url_for('party_to_manifest_button') }}" method="post">
+        <select name= party_numb >
+    {% for party_numb in df_parties %}
+    <option value= "{{party_numb}}" SELECTED>{{party_numb}}</option>"
+    {% endfor %}
+</select>
+    <button type="submit"> Отгрузить </button>
+  </form>
+<p> </p>
+
+
+{% endblock %}

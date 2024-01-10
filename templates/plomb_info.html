@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %}
+
+        Пломба {{parcel_plomb_numb}}
+        <p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+<div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+        {% elif vector is none %}
+<div class="{{ category }}" >{{ message }}</div>
+{% elif "LAND" in vector %}
+<div class="{{ category }}" style="border: 1px solid #000080;
+    background: #657fff; font-size: 2em;"> {{ message }} </div>
+{% else %}
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+
+{% endif %}
+  {% endfor %}
+{% endwith %}
+        {% if title_status == 'ВЫПУСК' %}
+        <div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 1.5em;"> {{title_status}} </div>
+        {% endif %}
+        <br> кол. {{df_parc_quont}}-(отказн. {{df_parc_refuse_quont}})  {% endblock %}</h2>
+    <span class="badge badge-primary"> CEL Logistic </span>
+    <p>
+        <form action="{{ url_for('get_plomb_info') }}" method="post">
+    <input id="csrf_token" name="csrf_token" type="hidden" value="IjkyODk2NDQ5Y2I5ZTM1NWIzMGIwMjg3ODhkMDVkZjU2OTNlOGM1Nzki.YOXJcg.xepMZGrYqvcwSnXtnzGl31UhASk">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" onload="this.click();" autofocus="autofocus"/>
+    <input type="submit" value="Search" />
+    </form>
+
+    <p>{% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+{% endfor %} </p>
+
+{% endblock %}

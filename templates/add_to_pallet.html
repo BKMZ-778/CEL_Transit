@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %}  {% endblock %}</h2>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+<div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+ {% endif %}
+  {% endfor %}
+{% endwith %}
+
+    <span class="badge badge-primary"> CEL Logistic </span>
+    <p>
+    <dt> Пломба / Посылка-место
+        <form action="{{ url_for('add_to_pallet') }}" method="post">
+    <input type="search" name="parcel_plomb_numb_np" value="" required minlength="1" onload='this.click();' autofocus/>
+    <input type="submit" value="Search" />
+
+  </form>
+<p> </p>
+<dt> Номер паллета
+    <form action="{{ url_for('add_to_pallet_button') }}" method="post">
+        <select name= pallet_new >
+    {% for pallet_new in df_all_pallets %}
+    <option value= "{{pallet_new}}" SELECTED>{{pallet_new}}</option>"
+    {% endfor %}
+</select>
+    <button type="submit"> ДОБАВИТЬ </button>
+  </form>
+<p> </p>
+    <p> </p>
+<form action="{{ url_for('delete_last_plomb_addpallet') }}" method="post">
+    <input type="submit" value="Удалить последнюю запись" />
+  </form>
+<p> </p>
+<form action="{{ url_for('clean_working_place_addpallet') }}" method="post">
+    <input type="submit" value="Очистить всю таблицу" />
+  </form>
+<p> </p>
+    <p> {% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+        {% endfor %} </p>
+
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>{% block title %} Пломба {% endblock %}</h1>
+
+    <a href="{{ url_for('plomb_searh')}} ">
+        <h2> Отбор пломб </h2>
+    </a>
+    <hr>
+    <a href="{{ url_for('old_plomb_add')}} ">
+        <h2> Новая пломба </h2>
+    </a>
+    <hr>
+    <a href="{{ url_for('new_place')}} ">
+        <h2> Сформировать место </h2>
+    </a>
+    <hr>
+
+{% endblock %}

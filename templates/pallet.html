@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>{% block title %} Паллет {% endblock %}</h1>
+
+    <a href="{{ url_for('create_pallet')}} ">
+        <h2> Сформировать новый паллет </h2>
+    </a>
+    <hr>
+    <a href="{{ url_for('add_to_pallet')}}">
+        <h2> Добавить на паллет </h2>
+    </a>
+    <hr>
+    <a href="{{ url_for('pallet_info')}}">
+        <h2> Инфо по паллету </h2>
+    </a>
+    <hr>
+
+{% endblock %}

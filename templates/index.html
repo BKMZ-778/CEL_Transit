@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<a href="#">Админка</a>
+    <h1>{% block title %} Общая информация {% endblock %}</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+    <dt> Посмотреть объект:
+<form action="{{ url_for('object_info') }}" method="post">
+    <input type="search" name="numb" value="" onload='this.click();' autofocus/>
+    <input type="submit" value="Найти" />
+  </form>
+<p>
+
+<a href="{{ url_for('all_not_shipped')}} ">
+    </font>
+            <p><font size="5">
+    <dt> НЕ ОТГРУЖЕННОЕ <dt>
+    </a>
+        <p>
+            <p>
+
+<a href="{{ url_for('all_parties')}} ">
+    <dt> Партии в системе: <dt>
+    </a>
+        <p>
+            <p>
+
+{% for col in analit_table %}
+            <p><font size="5">
+         <a href="{{ url_for('party_info', row=analit_table[col].values[0])}} ">
+             {{ analit_table[col].values[0] }}</a>
+            </font>
+            <p><font size="4">
+             мест: {{analit_table[col].values[1]}}(<a><font color="green">{{analit_table[col].values[1]-analit_table[col].values[3]}}</font></a>-<a><font color="red">{{analit_table[col].values[3]}}</font></a>)
+            ,
+            посылок: {{analit_table[col].values[2]}}(<a><font color="green">{{analit_table[col].values[2]-analit_table[col].values[4]}}</font></a>-<a><font color="red">{{analit_table[col].values[4]}}</font></a>)
+         вес: {{analit_table[col].values[5]}}, не отгруженно мест:<a href="{{ url_for('party_info_vectors', row=analit_table[col].values[0])}}"><font color="red"> {{analit_table[col].values[6]}}</a>
+</font></p>
+
+
+        <hr>
+    {% endfor %}
+{% endblock %}

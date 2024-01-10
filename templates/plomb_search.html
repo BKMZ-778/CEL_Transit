@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title>Отбор пломб</title>
+<body>
+<dl>
+ <dt>
+</dl>
+<dl>
+ <dt> Пломба
+</dl>
+<form action="{{ url_for('get_plomb_info') }}" method="post">
+    <input id="csrf_token" name="csrf_token" type="hidden" value="IjkyODk2NDQ5Y2I5ZTM1NWIzMGIwMjg3ODhkMDVkZjU2OTNlOGM1Nzki.YOXJcg.xepMZGrYqvcwSnXtnzGl31UhASk">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" onload="this.click();" autofocus="autofocus" />
+    <input type="submit" value="Search" />
+  </form>
+{% endblock %}

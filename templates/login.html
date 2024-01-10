@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title>Авторизация</title>
+<body>
+<form action = "{{ url_for('login_insert') }}"  method = "post" >
+<table>
+<tr><td>Email</td><td><input type = 'email' name = 'email'></td></tr>
+<tr><td>Password</td><td><input type = 'password' name = 'password'></td></tr>
+<tr><td><input type = "submit" value = "Submit"></td></tr>
+</table>
+</form>
+</body>
+{% endblock %}

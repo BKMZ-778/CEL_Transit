@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<dt> Скан ИЗЪЯТИЙ по партии {{party_numb}},
+
+    <p style="font-size:32px"> Найдено {{quont_refuses_done}} из {{quont_refuses_all}}</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+<form action="{{ url_for('check_refuses_work', party_numb=party_numb) }}" method="post">
+    <input type="search" name="parcel_numb" value="" onload='this.click();' autofocus/>
+    <input type="submit" value="Найти" />
+  </form>
+
+<p>{% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+{% endfor %}</p>
+
+{% endblock %}

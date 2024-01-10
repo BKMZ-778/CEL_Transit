@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title>Отбор посылок</title>
+<body>
+<dl>
+ <dt>
+</dl>
+<dl>
+ <dt> Отбор посылок
+</dl>
+<form action="{{ url_for('get_parcel_info') }}" method="post">
+    <input type="search" name="parcel_numb" value="" required minlength="1" onload='this.click();' autofocus />
+    <input type="submit" value="Search" />
+  </form>
+{% endblock %}
