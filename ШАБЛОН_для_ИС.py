@@ -259,10 +259,11 @@ def start():
     print(len_df_income)
     len_df_finish = len(df)
     print(len_df_finish)
-    writer = pd.ExcelWriter(f'Шаблон_{party_numb} для редактирования.xlsx', engine='xlsxwriter')
+    df = df.sort_values(['Номер пломбы', 'Номер отправления ИМ'], ascending=[True, True])
+    writer = pd.ExcelWriter(f'Шаблон_{party_numb}.xlsx', engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Sheet1', index=False)
     writer.save()
-    msg = "Шаблон для редактирования сформирован!"
+    msg = "Шаблон сформирован!"
     mb.showinfo("Информация", msg)
 
 def divide_df():
@@ -316,7 +317,7 @@ window.title('Формирование шаблона OZON/CEL')
 window.geometry("500x150+400+400")
 name = tk.Label(window, text="Номер CMR")
 
-a = tk.StringVar(value='OZON-158')
+a = tk.StringVar(value='OZON-20')
 entry_party = tk.Entry(window,  width=20, textvariable=a)
 
 
