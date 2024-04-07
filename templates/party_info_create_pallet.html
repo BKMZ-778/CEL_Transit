@@ -24,17 +24,17 @@
 
     <span class="badge badge-primary"> CEL Logistic </span>
 <br>
-   <form action="{{ url_for('party_info_issues_to_pallet', row=row) }}" method="post">
+   <form action="{{ url_for('party_to_pallet.party_info_issues_to_pallet', row=row) }}" method="post">
     <input type="submit" value="Разместить 0-ки на на паллет" />
   </form>
 <p> </p>
 <br>
-   <form action="{{ url_for('party_info_allnotshipped_to_pallet', row=row) }}" method="post">
+   <form action="{{ url_for('party_to_pallet.party_info_allnotshipped_to_pallet', row=row) }}" method="post">
     <input type="submit" value="Разместить не отгруженное на паллет" />
   </form>
 <p> </p>
 <br>
-   <form action="{{ url_for('party_info_vectors_to_pallet', row=row) }}" method="post">
+   <form action="{{ url_for('party_to_pallet.party_info_vectors_to_pallet', row=row) }}" method="post">
     <input type="submit" value="Разместить по направлениям на паллет (не отгруженное)
     " />
   </form>

@@ -24,9 +24,6 @@
 <a href="{{ url_for('get_plomb_come', party_numb=row)}} ">
         <h2> Приемка по местам </h2>
     </a>
-<!-- <a href="{{ url_for('API_update_decisions', party_numb=row)}} ">
-        <h2> Подгрузить решения </h2>
-    </a> -->
     <span class="badge badge-primary"> CEL Logistic </span>
 <p> </p>
    <form action="{{ url_for('party_info_refuses', row=row) }}" method="post">

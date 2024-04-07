@@ -19,12 +19,12 @@
   {% endfor %}
 {% endwith %}
     <dt> Объект на паллете
-        <form action="{{ url_for('pallet_info') }}" method="post">
+        <form action="{{ url_for('pallet.pallet_info') }}" method="post">
     <input type="search" name="numb" value="" required minlength="1" onload='this.click();' autofocus/>
     <input type="submit" value="Search" />
       </form>
 <p> </p>
-   <form action="{{ url_for('pallet_info_callback_refuses') }}" method="post">
+   <form action="{{ url_for('pallet.pallet_info_callback_refuses') }}" method="post">
     <input type="submit" value="Отвязать изъятия от паллета" />
   </form>
     <p> {% for table in tables %}

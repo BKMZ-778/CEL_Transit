@@ -13,7 +13,7 @@
   </head>
   <body>
     <nav class="navbar navbar-expand-md navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('fetchmany_party')}}">CEL Logistic</a>
+        <a class="navbar-brand" href="{{ url_for('fetchmany_party')}}">CEL Logistic {{ get_user_name() }} </a>
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -41,6 +41,11 @@
             <ul class="navbar-nav">
             <li class="nav-item active">
                 <a class="nav-link" href="{{ url_for('make_manifest')}}"> Манифест отгрузки </a>
+            </li>
+            </ul>
+            <ul class="navbar-nav">
+            <li class="nav-item active">
+                <a class="nav-link" href="{{ url_for('parc_searh')}}"> Поиск </a>
             </li>
             </ul>
             <ul class="navbar-nav">

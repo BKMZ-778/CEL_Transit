@@ -28,13 +28,13 @@
     <p>
     <dt> Пломба/Посылка
 
-<form action="{{ url_for('create_pallet') }}" method="post">
+<form action="{{ url_for('pallet.create_pallet') }}" method="post">
     <input type="search" name="parcel_plomb_numb_np" value="" required minlength="1" onload='this.click();' autofocus/>
     <input type="submit" value="Search" />
 </form>
 
 <dt> Номер паллета
-<form action="{{ url_for('insert_pallet') }}" method="post">
+<form action="{{ url_for('pallet.insert_pallet') }}" method="post">
     <input type="search" name="pallet_new" value="{{i}}" size="8" readonly/>
     <input type="submit" value="Сформировать Паллет" />
   </form>
@@ -43,11 +43,11 @@
     <p> </p>
     <p> </p>
     <br />
-<form action="{{ url_for('delete_last_plomb') }}" method="post">
+<form action="{{ url_for('pallet.delete_last_plomb') }}" method="post">
     <input type="submit" value="Удалить последнюю запись" />
   </form>
 <p> </p>
-<form action="{{ url_for('clean_working_place_pallet') }}" method="post">
+<form action="{{ url_for('pallet.clean_working_place_pallet') }}" method="post">
     <input type="submit" value="Очистить всю таблицу" />
   </form>
 <p> </p>

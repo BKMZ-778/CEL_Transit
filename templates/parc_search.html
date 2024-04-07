@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<meta charset="utf-8">
+<title>Поиск накладной</title>
+ Инфо списку накладных
+</dl>
+<form action="{{ url_for('get_parcel_info_list') }}" method="post">
+    <input type="search" name="parcel_numbs" value="" />
+    <input type="submit" value="Search" />
+  </form>
+{% endblock %}

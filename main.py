@@ -475,6 +475,7 @@ def Specf():
     df_Specif_gr = df.groupby('КОД ТНВЭД', sort=False).sum()
     df['Наименование'] = df['Наименование'] + ' ' + df['Кол.'].astype(str) + ' ' + 'ШТ'
     df_text = df.groupby(['КОД ТНВЭД'])['Наименование'].apply(lambda x: ', '.join(x)).reset_index()
+
     df['Размещен в мешках / Кол-во мешков'] = \
     df.drop_duplicates(subset=['КОД ТНВЭД', 'Пломба'], keep='first').groupby(['КОД ТНВЭД'])['Пломба'].transform('count')
 
@@ -1013,7 +1014,7 @@ entry_pac_var_lb = tk.Label(window, text="Вид упаковки", font='hank 9
 entry_sample_var_lb = tk.Label(window, text="Шаблон", font='hank 9 bold')
 entry_koef_lb = tk.Label(window, text="Коэффициент уменьшения цены (работает только для Цайняо, МТТ и РЭ)", font='hank 9 bold')
 
-a = tk.StringVar(value='CEL-42')
+a = tk.StringVar(value='OZON-218')
 b = tk.StringVar()
 c = tk.StringVar(value=now)
 koef = tk.StringVar(value='0,5')

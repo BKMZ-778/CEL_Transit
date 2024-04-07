@@ -1,47 +1,41 @@
-from flask import Flask, jsonify, request, render_template, redirect, url_for, send_file
-from flask import abort
-from flask import flash
-import pandas as pd
-import sqlite3 as sl
-import numpy as np
-import logging
-import openpyxl
-from copy import copy
-from openpyxl.utils.cell import range_boundaries
-from openpyxl.worksheet.page import PageMargins
-import xlsxwriter
 import datetime
-from flask import Response
+import logging
 import os
+import sqlite3 as sl
+from copy import copy
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 from io import BytesIO
 from smtplib import SMTP_SSL
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-import os
-import requests
+
+import numpy as np
+import openpyxl
+import pandas as pd
 import pytz
+import requests
+from apispec import APISpec
+from apispec.ext.marshmallow import MarshmallowPlugin
+from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask, jsonify, request, render_template, redirect, url_for, send_file
+from flask import Response
+from flask import abort
+from flask import flash
+from flask import make_response
+from flask_apispec import use_kwargs, marshal_with
+from flask_apispec.extension import FlaskApiSpec
+from flask_jwt_extended import (
+    JWTManager, jwt_required, get_jwt_identity, set_access_cookies,
+    unset_jwt_cookies)
+from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
-from flask_restful import Resource,  Api
-from sqlalchemy.orm import sessionmaker, scoped_session
+from openpyxl.utils.cell import range_boundaries
+from openpyxl.worksheet.page import PageMargins
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from apispec.ext.marshmallow import MarshmallowPlugin
-from apispec import APISpec
-from flask_apispec.extension import FlaskApiSpec
-from flask_apispec import use_kwargs, marshal_with
-from flask import make_response
-from flask_jwt_extended import (
-    JWTManager, jwt_required, create_access_token,
-    create_refresh_token,
-    get_jwt_identity, set_access_cookies,
-    set_refresh_cookies, unset_jwt_cookies)
-from schemas import VideoSchema, UserSchema, AuthSchema
-import time
-import threading
-from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy.orm import sessionmaker, scoped_session
 
-
+from schemas import UserSchema, AuthSchema
 
 download_folder = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/'
 addition_folder = f'{download_folder}Места-Паллеты/'
@@ -263,7 +257,6 @@ def get_parcel_info_API():
         con = sl.connect('BAZA.db')
         with con:
             data = con.execute("select count(*) from sqlite_master where type='table' and name='api_parcels'")
-            data = con.execute("select count(*) from sqlite_master where type='table' and name='api_parcels'")
             for row in data:
                 # если таких таблиц нет
                 if row[0] == 0:
@@ -281,7 +274,7 @@ def get_parcel_info_API():
             for row in data:
                 print(row)
         with con:
-            query = """SELECT baza.parcel_numb, baza.custom_status, baza.custom_status_short, baza.decision_date, baza.refuse_reason
+            query = """SELECT baza.registration_numb, baza.parcel_numb, baza.custom_status, baza.custom_status_short, baza.decision_date, baza.refuse_reason
                         FROM baza                          
                         JOIN api_parcels ON api_parcels.parcel_numb = baza.parcel_numb
                         """
@@ -434,13 +427,15 @@ def test(df):
 def fechone_plomb():
     con = sl.connect('BAZA.db')
     con.row_factory = sl.Row
-    with con:
-        data = pd.read_sql("Select DISTINCT ID, party_numb from baza", con)
-        data = data.sort_values(by='ID', ascending=False)
-        parties = data.drop_duplicates(subset='party_numb')['party_numb']
-        parties = parties.fillna(value=np.nan)
-        logger.warning(parties)
-    con.close()
+    try:
+        with con:
+            data = pd.read_sql("Select DISTINCT ID, party_numb from baza", con)
+            data = data.sort_values(by='ID', ascending=False)
+            parties = data.drop_duplicates(subset='party_numb')['party_numb']
+            parties = parties.fillna(value=np.nan)
+        con.close()
+    except Exception as e:
+        logger.warning(e)
     return render_template('index.html', parties=parties)
 
 @app_svh.route('/info', methods=['GET', 'POST'])
@@ -1844,10 +1839,10 @@ def Scarif_request_events():
                          'exds90': 'отказ в выпуске товаров',
                          'exds0': 'статус не определен'}
     con = sl.connect('BAZA.db')
-    con.execute('pragma journal_mode=wal')
+    #con.execute('pragma journal_mode=wal')
     df = pd.read_sql(f"Select parcel_numb from baza "
                      f"where party_numb NOT LIKE '%GBS%' and party_numb NOT LIKE '%TEST%' and party_numb NOT LIKE '%тест%'"  # where ID > (len(ID) - 200 000)
-                     f"AND custom_status_short = 'ИЗЪЯТИЕ'", con).drop_duplicates(subset='parcel_numb')
+                     f"AND custom_status_short = 'ИЗЪЯТИЕ' AND custom_status != 'РЕЭКСПОРТ ЗАПРЕТ ВЫВОЗА'", con).drop_duplicates(subset='parcel_numb')
     for parcel_numb in df['parcel_numb']:
         url = f"https://cellog.deklarant.ru/api/external/parcel-status/{parcel_numb}"
         headers = {"api-token": "40e2f498-450c-4b9f-a509-7f4c8877a6ff"}
@@ -1880,18 +1875,99 @@ def Scarif_request_events():
             print(e)
 
 
-        """df = pd.json_normalize(result)
-        print(df)
-        writer = pd.ExcelWriter('GBS_json.xlsx', engine='xlsxwriter')
-        df.to_excel(writer, sheet_name='Sheet1', index=False)
-        writer.save()"""
+@app_svh.route('/search', methods=['GET'])
+def parc_searh():
+    return render_template('parc_search.html')
 
-"""scheduler = BackgroundScheduler(daemon=True)
+
+@app_svh.route('/get_info', methods=['POST', 'GET'])
+def get_parcel_info_list():
+    parcel_numbs = request.form['parcel_numbs'].replace(' ', ',')
+    parcels_list = parcel_numbs.split(",")
+    df_all_parcels = pd.DataFrame()
+    for parcel_numb in parcels_list:
+        try:
+            con = sl.connect('BAZA.db')
+            with con:
+                df_parc_events = pd.read_sql(
+                    f"SELECT * FROM baza where parcel_numb = '{parcel_numb}' ORDER BY ID", con)
+                print(df_parc_events)
+                df_all_parcels = df_all_parcels.append(df_parc_events)
+        except Exception as e:
+            logger.warning(f'parcel {parcel_numb}  - read action faild with error: {e}')
+            return {'message': str(e)}, 400
+    return render_template('parc_info.html', tables=[df_all_parcels.to_html(classes='mystyle', index=False)],
+                           titles=['na', 'ALL'],
+                           parcel_numb=parcel_numb)
+
+
+@app_svh.route('/api_insert_decisions/', methods=['POST', 'GET'])
+def api_insert_decisions():
+    event_details = request.get_json()
+    parcel_numb = event_details["parcel_numb"]
+    try:
+        registration_numb = event_details["registration_numb"]
+    except:
+        registration_numb = 'unknown'
+    custom_status = event_details["custom_status"]
+    custom_status_short = event_details["custom_status_short"]
+    refuse_reason = event_details["refuse_reason"]
+    decision_date = event_details["decision_date"]
+    try:
+        con = sl.connect('BAZA.db')
+        with con:
+            row_isalready_in = pd.read_sql(f"Select * from baza where parcel_numb = '{parcel_numb}'", con)
+            print(row_isalready_in)
+            if row_isalready_in.empty:
+                statement = "INSERT INTO baza (registration_numb, parcel_numb, custom_status, custom_status_short, refuse_reason, decision_date) VALUES (?, ?, ?, ?, ?, ?)"
+                con.execute(statement, [registration_numb, parcel_numb, custom_status, custom_status_short, refuse_reason, decision_date])
+                print('INSERT OK')
+            else:
+                con.execute(f"Update baza set"
+                            f" registration_numb = '{registration_numb}',"
+                            f" custom_status = '{custom_status}',"
+                            f" custom_status_short = '{custom_status_short}',"
+                            f" decision_date = '{decision_date}',"
+                            f" refuse_reason = '{refuse_reason}' where parcel_numb = '{parcel_numb}'")
+
+                print('Update OK')
+        return jsonify(True)
+    except Exception as e:
+        print(e)
+
+
+def progress(status, remaining, total):
+    print(f'Copied {total-remaining} of {total} pages...')
+
+
+def backup():
+    con = sl.connect("BAZA.db")
+    bck = sl.connect('BAZA_backup.db')
+    with bck:
+        con.backup(bck, pages=1, progress=progress)
+    bck.close()
+    con.close()
+
+
+def check_and_backup():
+    con = sl.connect("BAZA.db")
+    cur = con.cursor()
+    try:
+        cur.execute("PRAGMA integrity_check")
+        print('Baza is OK')
+        backup()
+    except sl.DatabaseError:
+        con.close()
+
+
+check_and_backup()
+
+#scheduler = BackgroundScheduler(daemon=True)
 
 
 # Create the job
-scheduler.add_job(func=GBS_request_events, trigger='interval', seconds=5) #trigger='cron', hour='22', minute='30'
-scheduler.start()"""
+#scheduler.add_job(func=back_up, trigger='interval', seconds=30) #trigger='cron', hour='22', minute='30'
+#scheduler.start()
 
 if __name__ == '__main__':
     app_svh.secret_key = 'c9e779a3258b42338334daaed51bccf7'
