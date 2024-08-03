@@ -37,7 +37,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 
 from schemas import UserSchema, AuthSchema
 
-download_folder = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/'
+download_folder = 'C:/Users/79089/Desktop/ДОКУМЕНТЫ/'
 addition_folder = f'{download_folder}Места-Паллеты/'
 if not os.path.isdir(download_folder):
     os.makedirs(download_folder, exist_ok=True)
@@ -557,8 +557,8 @@ def load_sample_manifest():
                 abort(400)
             uploaded_file.save(uploaded_file.filename)
             df = pd.read_excel(filename, sheet_name=0, engine='openpyxl')
-            df = df[['Номер отправления ИМ', 'Номер пломбы', 'Наименование товара', '№ AWB', 'Вес брутто (Вес позиции)']]
-            df = df.rename(columns={'Номер отправления ИМ': 'parcel_numb',
+            df = df[['Номер накладной СДЭК', 'Номер пломбы', 'Наименование товара', '№ AWB', 'Вес брутто (Вес позиции)']]
+            df = df.rename(columns={'Номер накладной СДЭК': 'parcel_numb',
                                    'Номер пломбы': 'parcel_plomb_numb',
                                    'Наименование товара': 'goods',
                                    '№ AWB': 'party_numb', 'Вес брутто (Вес позиции)': 'parcel_weight'})
@@ -1733,7 +1733,7 @@ def GBS_request_events():
     id_for_job = len_id - 1000000
     print(id_for_job)
     df = pd.read_sql(f"Select parcel_numb from baza "
-                     f"where party_numb LIKE '%GBS%' "
+                     f"where party_numb LIKE '%URC%' "
                      f"AND ID > {id_for_job} "  # where ID > (len(ID) - 200 000)
                      f"AND custom_status_short = 'ИЗЪЯТИЕ' "
                      f"AND custom_status != 'Return in process'", con).drop_duplicates(subset='parcel_numb')
@@ -1960,14 +1960,15 @@ def check_and_backup():
         con.close()
 
 
-check_and_backup()
+#check_and_backup()
 
-#scheduler = BackgroundScheduler(daemon=True)
+# scheduler = BackgroundScheduler(daemon=True)
+#
+#
+# #Create the job
+# scheduler.add_job(func=GBS_request_events, trigger='interval', seconds=30) #trigger='cron', hour='22', minute='30'
+# scheduler.start()
 
-
-# Create the job
-#scheduler.add_job(func=back_up, trigger='interval', seconds=30) #trigger='cron', hour='22', minute='30'
-#scheduler.start()
 
 if __name__ == '__main__':
     app_svh.secret_key = 'c9e779a3258b42338334daaed51bccf7'

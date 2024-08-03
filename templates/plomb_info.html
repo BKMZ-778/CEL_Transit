@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% if audiofile != 'None' %}
+<audio autoplay="autoplay">
+    <source src="{{ url_for('static', filename=audiofile)}}"  type="audio/wav">
+</audio>
+{% endif %}
     <h2>{% block title %}
         <a {{ user_name }}> </a>
 

@@ -17,6 +17,10 @@
         <p> </p>
         <p><input type="submit" value="Ок"></p>
     </form>
+        <p> </p>
+    <form action="{{ url_for('load_decision_api') }}" method="post">
+    <input type="submit" value="Начать загрузку решений из сервера (chunk)" />
+  </form>
 <p> </p>
     <a class="navbar-brand" href="{{ url_for('load_sample_manifest')}}">Загрузить Шаблон Манифеста</a>
 {% endblock %}

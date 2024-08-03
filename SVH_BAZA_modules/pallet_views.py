@@ -1,13 +1,16 @@
+import sqlite3
 import sqlite3 as sl
+import traceback
 
 import numpy as np
 import pandas as pd
 import winsound
 from flask import flash
 from flask import request, render_template, Blueprint
+from flask_jwt_extended import jwt_required
 
 from SVH_BAZA_modules.services import (insert_user_action, map_eng_to_rus, addition_folder,
-                                       logger)
+                                       logger, get_user_name)
 from . services import style
 
 
@@ -16,6 +19,7 @@ bp_pallet = Blueprint('pallet', __name__, url_prefix='/pallet')
 parcel_plomb_numb_np = None
 df_plombs_np = pd.DataFrame()
 vector = None
+
 
 @bp_pallet.route('/create_new_pallet', methods=['POST', 'GET'])
 def create_pallet():
@@ -137,6 +141,143 @@ def create_pallet():
                            modal=modal, vector=vector)
 
 
+df_plombs_html = pd.DataFrame()
+
+
+@bp_pallet.route('/create_new_pallet_sql', methods=['POST', 'GET'])
+def create_pallet_sql():
+    user_name, user_id = get_user_name()
+    audiofile = 'None'
+    modal = 0
+    first_parcel = None
+    vector = None
+    try:
+        parcel_plomb_numb = request.form['parcel_plomb_numb']
+    except:
+        parcel_plomb_numb = None
+    try:
+        con_vect = sl.connect('VECTORS.db')
+        con = sl.connect('BAZA.db')
+        with con:
+            df_all_pallets = pd.read_sql(f"SELECT DISTINCT pallet FROM baza", con).drop_duplicates(subset='pallet',
+                                                                                           keep='first')
+            df_plomb = pd.read_sql(f"SELECT * FROM baza where parcel_plomb_numb = '{parcel_plomb_numb}'", con)
+            try:
+                first_parcel = df_plomb['parcel_numb'].values[0]
+                print(first_parcel)
+            except:
+                pass
+        with con_vect:
+            try:
+                vector = con_vect.execute(
+                    f"SELECT vector FROM vectors where parcel_plomb_numb = '{parcel_plomb_numb}'").fetchone()[
+                    0]
+                flash(f'{vector}!', category='success')
+                print(vector)
+            except:
+                try:
+                    vector = con_vect.execute(
+                        f"SELECT vector FROM vectors where parcel_numb = '{first_parcel}'").fetchone()[
+                        0]
+                    flash(f'{vector}!', category='success')
+                    print(vector)
+                except Exception as e:
+                    vector = None
+                    print(e)
+            try:
+                df_all_pallets['pallet'] = df_all_pallets['pallet'].fillna(0).astype(int)
+                df_all_pallets = df_all_pallets.sort_values(by='pallet')
+                last_pall_numb = int(df_all_pallets.values[-1].tolist()[0])
+                i = last_pall_numb + 1
+            except:
+                last_pall_numb = df_all_pallets.values[0].tolist()[0]
+                i = 1
+
+            if df_plomb['custom_status_short'].astype(str).str.contains('ИЗЪЯТИЕ').any():
+                flash(f'ВНИМАНИЕ, пломба с изъятием!', category='error')
+                winsound.PlaySound('Snd\Snd_CancelIssue.wav', winsound.SND_FILENAME)
+            df_plomb = df_plomb.drop_duplicates(subset=['parcel_plomb_numb'], keep='first')
+            if df_plomb.empty and parcel_plomb_numb is not None:
+                flash(f'Пломба не найдена!', category='error')
+                winsound.PlaySound('Snd\Snd_NoPlomb.wav', winsound.SND_FILENAME)
+            if not df_plomb.empty:
+                try:
+                    with con:
+                        con.execute(f"INSERT OR REPLACE INTO add_to_pallet (parcel_plomb_numb, user_id, vector) "
+                                    f"VALUES('{parcel_plomb_numb}', '{user_id}', '{vector}')")
+                except Exception as e:
+                    flash(f'Пломба не найдена! {e}', category='error')
+                    audiofile = 'Snd\Snd_NoPlomb.wav'
+                    print(str(traceback.format_exc()))
+        with con:
+            df_plombs_np = pd.read_sql(f"SELECT * FROM add_to_pallet where user_id = '{user_id}'",
+                                       con).fillna('').sort_values(by='ID', ascending=False)
+        quont_plombs = len(df_plombs_np)
+        df_plombs_np['№1'] = np.arange(len(df_plombs_np))[::-1] + 1
+        df_plombs_html = df_plombs_np.rename(columns={
+            '№1': '№',
+            'parcel_plomb_numb': 'Пломба',
+            'vector': 'Направление',
+            'user_id': 'user_id'
+        })
+        print(df_plombs_html)
+        df_plombs_html = df_plombs_html[['№', 'Пломба', 'Направление', 'user_id']]
+        df_plombs_html.fillna("", inplace=True)
+
+        df_vectors = df_plombs_html[['Пломба', 'Направление']].drop_duplicates(subset='Направление')
+        if len(df_vectors) > 1:
+            flash(f'Пломбы с разными направлениями!', category='error')
+        object_name = parcel_plomb_numb
+        comment = f'Сформировать новый паллет: пломба отмечена для добавления на паллет №{i}'
+        insert_user_action(object_name, comment)
+        audiofile = 'Snd\zvuk-vezeniya.wav'
+        return render_template('New_pallet.html', tables=[style + df_plombs_html.to_html(classes='mystyle', index=False,
+                                                                                         float_format='{:2,.2f}'.format)],
+                               titles=['na', '\n\nМешки\места:'],
+                               parcel_plomb_numb=parcel_plomb_numb, i=i, quont_plombs=quont_plombs,
+                               modal=modal, vector=vector, audiofile=audiofile)
+    except Exception as e:
+        #winsound.PlaySound('Snd\Snd_NoPlomb.wav', winsound.SND_FILENAME)
+        audiofile = 'Snd\Snd_NoPlomb.wav'
+        print(str(traceback.format_exc()))
+        return render_template('New_pallet.html', audiofile=audiofile)
+
+
+
+@bp_pallet.route('/delete_last_plomb_sql', methods=['POST', 'GET'])
+def delete_last_plomb_sql():
+    user_name, user_id = get_user_name()
+    con = sqlite3.connect('BAZA.db')
+    with con:
+        df_last_plomb = pd.read_sql(f"SELECT * FROM add_to_pallet WHERE user_id = '{user_id}' AND id = (SELECT MAX(id) FROM add_to_pallet)", con)
+        deleted_plomb_numb = df_last_plomb['parcel_plomb_numb'].values[0]
+        con.execute(f"DELETE FROM add_to_pallet WHERE parcel_plomb_numb = '{deleted_plomb_numb}'")
+        df_plombs_np = pd.read_sql(f"SELECT * FROM add_to_pallet where user_id = '{user_id}'",
+                                   con).fillna('').sort_values(by='ID', ascending=False)
+
+    df_plombs_np['№1'] = np.arange(len(df_plombs_np))[::-1] + 1
+    df_plombs_html = df_plombs_np.rename(columns={
+        '№1': '№',
+        'parcel_plomb_numb': 'Пломба',
+        'vector': 'Направление',
+        'user_id': 'user_id'
+    })
+    print(df_plombs_html)
+    df_plombs_html = df_plombs_html[['№', 'Пломба', 'Направление', 'user_id']]
+    df_plombs_html.fillna("", inplace=True)
+    object_name = deleted_plomb_numb
+    quont_plombs = len(df_plombs_np)
+    comment = f'Удалена пломба из создания паллета'
+    insert_user_action(object_name, comment)
+    flash(f'{deleted_plomb_numb} Удалена из списка добавления', category='success')
+    return render_template('New_pallet.html',
+                           tables=[style + df_plombs_html.to_html(classes='mystyle',
+                                                                                     index=False,
+                                                                                     float_format='{:2,.2f}'.format)],
+                           titles=['na', '\n\nМешки\места:'],
+                           parcel_plomb_numb_np=parcel_plomb_numb_np, quont_plombs=quont_plombs)
+
+
 @bp_pallet.route('/delete_last_plomb', methods=['POST', 'GET'])
 def delete_last_plomb():
     global parcel_plomb_numb_np
@@ -157,6 +298,7 @@ def delete_last_plomb():
                            parcel_plomb_numb_np=parcel_plomb_numb_np)
 
 
+
 @bp_pallet.route('/delete_last_plomb_addpallet', methods=['POST', 'GET'])
 def delete_last_plomb_addpallet():
     global parcel_plomb_numb_np
@@ -166,6 +308,7 @@ def delete_last_plomb_addpallet():
     df_plombs_html = df_plombs_html[:-1]
     df_plombs_np = df_plombs_np[:-1]
     object_name = parcel_plomb_numb_np
+    flash(f'{parcel_plomb_numb_np} Удалена из добавления на паллет', category='success')
     comment = f'Удалена пломба из добавления на паллет'
     insert_user_action(object_name, comment)
     return render_template('add_to_pallet.html',
@@ -176,11 +319,24 @@ def delete_last_plomb_addpallet():
                            parcel_plomb_numb_np=parcel_plomb_numb_np)
 
 
-@bp_pallet.route('/search/clean_working_place_clean_working_place_pallet', methods=['POST'])
+@bp_pallet.route('/search/clean_working_place_pallet_sql', methods=['POST'])
+def clean_working_place_pallet_sql():
+    user_name, user_id = get_user_name()
+    con = sqlite3.connect('BAZA.db')
+    with con:
+        df_plomb = pd.read_sql(f"SELECT * FROM add_to_pallet WHERE user_id = '{user_id}'", con)
+        list_of_plombs = df_plomb['parcel_plomb_numb'].to_list()
+        qt_plomb = len(list_of_plombs)
+        con.execute(f"DELETE FROM add_to_pallet WHERE user_id = '{user_id}'")
+    flash(f'Таблица очищена, удалено {qt_plomb} пломб: {str(list_of_plombs)}', category='success')
+    object_name = None
+    comment = f'Сформировать новый паллет: Таблица очищена, удалено {qt_plomb} пломб: {str(list_of_plombs)}'
+    insert_user_action(object_name, comment)
+    return render_template('New_pallet.html')
+
+
+@bp_pallet.route('/search/clean_working_place_pallet', methods=['POST'])
 def clean_working_place_pallet():
-    global parcel_plomb_numb_np
-    global df_plombs_np
-    global df_plombs_html
     df_plombs_html = pd.DataFrame()
     df_plombs_np = pd.DataFrame()
     parcel_plomb_numb_np = None
@@ -188,6 +344,7 @@ def clean_working_place_pallet():
     comment = f'Сформировать новый паллет: Таблица очищена'
     insert_user_action(object_name, comment)
     return render_template('New_pallet.html')
+
 
 
 @bp_pallet.route('/search/clean_working_place_clean_working_place_addpallet', methods=['POST'])
@@ -259,6 +416,54 @@ def insert_pallet():
         insert_user_action(object_name, comment)
         flash(f'Паллет {pallet_new} сформирован!', category='success')
         winsound.PlaySound('Snd\Pallet_made.wav', winsound.SND_FILENAME)
+    return render_template('New_pallet.html')
+
+
+@bp_pallet.route('/insert_pallet_sql', methods=['POST', 'GET'])
+def insert_pallet_sql():
+    user_name, user_id = get_user_name()
+    #pallet_new = request.form['pallet_new']
+    con = sl.connect('BAZA.db')
+    with con:
+        df_all_pallets = pd.read_sql(f"SELECT pallet FROM baza", con).drop_duplicates(subset='pallet', keep='first')
+        try:
+            print(df_all_pallets['pallet'])
+            df_all_pallets['pallet'] = df_all_pallets['pallet'].fillna(0).astype(int)
+            df_all_pallets = df_all_pallets.sort_values(by='pallet')
+            logger.warning(df_all_pallets)
+            last_pall_numb = int(df_all_pallets.values[-1].tolist()[0])
+            pallet_new = last_pall_numb + 1
+        except Exception as e:
+            print(e)
+    # открываем базу
+    with con:
+        df_plomb = pd.read_sql(f"SELECT * FROM add_to_pallet WHERE user_id = '{user_id}'", con)
+        for parcel_plomb_numb in df_plomb['parcel_plomb_numb']:
+            con.execute(
+                f"Update baza set pallet = '{pallet_new}' where parcel_plomb_numb = '{parcel_plomb_numb}'")
+        con.execute(
+            f"DELETE FROM add_to_pallet WHERE user_id = '{user_id}'")
+        df_new_pallet = pd.read_sql(f"Select * from baza where pallet = '{pallet_new}'", con)
+        writer = pd.ExcelWriter(f'{addition_folder}Паллет {pallet_new}.xlsx', engine='xlsxwriter')
+        df_new_pallet.to_excel(writer, sheet_name='Sheet1', index=False)
+        for column in df_new_pallet:
+            column_width = max(df_new_pallet[column].astype(str).map(len).max(), len(column))
+            col_idx = df_new_pallet.columns.get_loc(column)
+            writer.sheets['Sheet1'].set_column(col_idx, col_idx, column_width)
+            writer.sheets['Sheet1'].set_column(0, 3, 10)
+            writer.sheets['Sheet1'].set_column(1, 3, 20)
+            writer.sheets['Sheet1'].set_column(2, 3, 20)
+            writer.sheets['Sheet1'].set_column(3, 3, 20)
+            writer.sheets['Sheet1'].set_column(4, 3, 30)
+            writer.sheets['Sheet1'].set_column(5, 3, 20)
+
+        writer.save()
+        con.commit()
+
+    object_name = pallet_new
+    comment = f'Сформировать новый паллет: Паллет сформирован'
+    insert_user_action(object_name, comment)
+    flash(f'Паллет {pallet_new} сформирован!', category='success')
     return render_template('New_pallet.html')
 
 
@@ -455,7 +660,7 @@ def pallet_info_callback_refuses():
     con = sl.connect('BAZA.db')
     with con:
         df_plombs = pd.read_sql(
-            "Select parcel_plomb_numb from baza where pallet = '{pallet}' AND custom_status_short = 'ИЗЪЯТИЕ'", con)
+            f"Select parcel_plomb_numb from baza where pallet = '{pallet}' AND custom_status_short = 'ИЗЪЯТИЕ'", con)
         df_plombs = df_plombs.drop_duplicates()
         df_plombs.to_sql('plombs_with_pullings', con, if_exists='append', index=False)
         con.execute(

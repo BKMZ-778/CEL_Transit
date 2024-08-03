@@ -20,7 +20,9 @@ from base64 import b64encode
 import hashlib
 import os
 
+from sqlalchemy import text
 
+from SVH_BAZA_APP_loc import engine
 
 pd.set_option('display.max_columns', None)
 con = sl.connect('BAZA.db')
@@ -252,7 +254,7 @@ def GBS_request_events_one():
         "method": "get_events_public",
         "params": {
             "Filter": {
-                "HWB": [{'HWBRefNumber': '99880012029454'}]
+                "HWB": [{'HWBRefNumber': '2091Y005342922'}]
 
             },
             "TextLang": "ru"
@@ -598,23 +600,41 @@ def GBS_request_events_df():
 
 def clean_baza():
     con = sl.connect('BAZA.db')
-    df = pd.read_excel('ALL4-1.xlsx', header=None)
-    i = 0
-    for parcel_numb in df[0]:
-        i += 1
-        print(i)
-        with con:
-            query = """DELETE FROM baza WHERE parcel_numb = ?
-                     AND custom_status_short = ?
-                     AND refuse_reason = ?"""
+    with con:
+        query = """DELETE FROM baza WHERE
+                 custom_status_short = ?
+                 AND refuse_reason = ?
+                 AND VH_status = ?
+                 AND ID < '5235000'"""
 
-            con.execute(query, (parcel_numb, 'ВЫПУСК', '10716050'))
+        con.execute(query, ('ВЫПУСК', '', 'ОТГРУЖЕН'))
 
     query2 = """VACUUM"""
     con.execute(query2)
 
+def clean_trackbaza():
+    con = sl.connect('TRACKS.db')
+    with con:
+        query = """DELETE FROM tracks WHERE
+                    ID < '3400000'"""
 
-#clean_baza()
+        con.execute(query)
+
+    query2 = """VACUUM"""
+    con.execute(query2)
+
+def clean_trackreportbaza():
+    con = sl.connect('BAZA-reports.db')
+    with con:
+        query = """DELETE FROM report WHERE
+                    ID < '462921'"""
+
+        con.execute(query)
+
+    query2 = """VACUUM"""
+    con.execute(query2)
+
+clean_trackreportbaza()
 
 #api_track718_add_track("14000222539")   19.03.2024 05:22
 #api_track718("14000222539")
@@ -631,19 +651,22 @@ def Scarif_request_events_toxl():
                       'exds70': 'продление срока выпуска',
                       'exds90': 'отказ в выпуске товаров',
                          'exds0': 'статус не определен'}
-    df = pd.read_excel(filename, sheet_name=0, engine='openpyxl', usecols='A, AO', header=None)
-    dict_of_result = {}
+    df = pd.read_excel(filename, sheet_name=0, engine='openpyxl', header=None)
     n = 0
+    parcels = []
+    reg_numbers = []
+    statuses = []
+    reasonMessages = []
     for parcel_numb in df[0]:
         url = f"https://cellog.deklarant.ru/api/external/parcel-status/{parcel_numb}"
         headers = {"api-token": "40e2f498-450c-4b9f-a509-7f4c8877a6ff"}
         try:
             response = requests.get(url=url,  # http://164.132.182.145:5001
                                      headers=headers)
-
+            print(response.text)
             json_events = response.json()
-            registration_numb = json_events['registryNumber']
             custom_status = json_events["externalStatus"]
+            reasonMessage = json_events["reasonMessage"]
             for key in map_scarif_status.keys():
                 custom_status = custom_status.replace(key, map_scarif_status[key])
             print(custom_status)
@@ -651,19 +674,64 @@ def Scarif_request_events_toxl():
             registryNumber = json_events['registryNumber']
             print(parcel_numb)
             print(registryNumber)
-            dict_of_result[parcel_numb] = registryNumber
+            parcels.append(parcel_numb)
+            reg_numbers.append(registryNumber)
+            statuses.append(custom_status)
+            reasonMessages.append(reasonMessage)
             n += 1
             print(n)
         except Exception as e:
             print(e)
 
-
-    print(dict_of_result)
-    df = pd.DataFrame(dict_of_result.items(), columns=['Номер реестра', 'Трек'])
+    result = [parcels, reg_numbers, statuses, reasonMessages]
+    print(result)
+    df = pd.DataFrame(result).transpose()
     print(df)
     writer = pd.ExcelWriter('Scarif_json.xlsx', engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Sheet1', index=False)
-    writer.save()
+    writer.close()
+
+
+def load_passp():
+    file_name_pd = filedialog.askopenfilename()
+    df_pd = pd.read_excel(file_name_pd, sheet_name=0, engine='openpyxl', converters={7: str, 8: str, 11: str})
+    print(df_pd['Номер паспорта'])
+    writer = pd.ExcelWriter(f'df_pd.xlsx', engine='xlsxwriter')
+    df_pd.to_excel(writer, sheet_name='Sheet1', index=False)
+    writer.close()
 
 
 Scarif_request_events_toxl()
+
+
+def create_database():
+    with engine.begin() as con:
+        create_baza_table_query = """
+                        CREATE TABLE baza (
+                        ID INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        registration_numb VARCHAR(25),
+                        party_numb VARCHAR(20),
+                        parcel_numb VARCHAR(20) NOT NULL UNIQUE,
+                        parcel_plomb_numb VARCHAR(20),
+                        parcel_weight DECIMAL(7,3) NOT NULL,
+                        custom_status VARCHAR(400),
+                        custom_status_short VARCHAR(8),
+                        decision_date VARCHAR(20),
+                        refuse_reason VARCHAR(400),
+                        pallet VARCHAR(10),
+                        zone VARCHAR(10),
+                        VH_status VARCHAR(10),
+                        goods VARCHAR(499),
+                        vector VARCHAR(50),
+                        track_numb VARCHAR(30)
+                        );
+                    """
+        try:
+            con.execute(text(create_baza_table_query))
+        except Exception as e:
+            print(e)
+
+
+#create_database()
+
+

@@ -1,7 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>{% block title %} {{parcel_plomb_numb_np}} {% endblock %}</h2>
+{% if audiofile != 'None' %}
+<audio autoplay="autoplay">
+    <source src="{{ url_for('static', filename=audiofile)}}"  type="audio/wav">
+</audio>
+{% endif %}
+    <h2>{% block title %} {{parcel_plomb_numb}} {% endblock %}</h2>
 Кол-во:
 <p style="font-size:40px"> {{quont_plombs}}</p>
 
@@ -24,17 +29,16 @@
   {% endfor %}
 {% endwith %}
 
-    <span class="badge badge-primary"> CEL Logistic </span>
-    <p>
     <dt> Пломба/Посылка
 
-<form action="{{ url_for('pallet.create_pallet') }}" method="post">
-    <input type="search" name="parcel_plomb_numb_np" value="" required minlength="1" onload='this.click();' autofocus/>
+<form action="{{ url_for('pallet.create_pallet_sql') }}" method="post">
+    <input id="csrf_token" name="csrf_token" type="hidden" value="IjkyODk2NDQ5Y2I5ZTM1NWIzMGIwMjg3ODhkMDVkZjU2OTNlOGM1Nzki.YOXJcg.xepMZGrYqvcwSnXtnzGl31UhASk">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" onload='this.click();' autofocus/>
     <input type="submit" value="Search" />
 </form>
 
 <dt> Номер паллета
-<form action="{{ url_for('pallet.insert_pallet') }}" method="post">
+<form action="{{ url_for('pallet.insert_pallet_sql') }}" method="post">
     <input type="search" name="pallet_new" value="{{i}}" size="8" readonly/>
     <input type="submit" value="Сформировать Паллет" />
   </form>
@@ -43,11 +47,11 @@
     <p> </p>
     <p> </p>
     <br />
-<form action="{{ url_for('pallet.delete_last_plomb') }}" method="post">
+<form action="{{ url_for('pallet.delete_last_plomb_sql') }}" method="post">
     <input type="submit" value="Удалить последнюю запись" />
   </form>
 <p> </p>
-<form action="{{ url_for('pallet.clean_working_place_pallet') }}" method="post">
+<form action="{{ url_for('pallet.clean_working_place_pallet_sql') }}" method="post">
     <input type="submit" value="Очистить всю таблицу" />
   </form>
 <p> </p>

@@ -220,18 +220,41 @@ def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
+def progress(status, remaining, total):
+    print(f'Copied {total-remaining} of {total} pages...')
+
+
+def backup():
+    con = sl.connect("BAZA.db")
+    bck = sl.connect('BAZA_backup.db')
+    with bck:
+        con.backup(bck, pages=1, progress=progress)
+    bck.close()
+    con.close()
+
+
+def check_and_backup():
+    con = sl.connect("BAZA.db")
+    cur = con.cursor()
+    try:
+        cur.execute("PRAGMA integrity_check")
+        print('Baza is OK')
+        backup()
+    except sl.DatabaseError:
+        con.close()
+
 
 def server_request_events():
     print("start updating")
     con = sl.connect('BAZA.db')
     len_id = con.execute('SELECT max(id) from baza').fetchone()[0]
-    id_for_job = len_id - 700000
+    id_for_job = len_id - 1300000
     df = pd.read_sql(f"Select parcel_numb from baza "
                      f"where ID > {id_for_job} "
                      f"AND custom_status_short = 'ИЗЪЯТИЕ' ", con).drop_duplicates(subset='parcel_numb')
 
 
-    list_chanks = list(chunks(df, 100))
+    list_chanks = list(chunks(df, 2000))
     # print(list_chanks)
     i = 0
     for chank in list_chanks:
@@ -278,10 +301,11 @@ def server_request_events():
             except Exception as e:
                 print(e)
         print(f"chunk{i} updated")
+    check_and_backup()
 
 
-scheduler = BackgroundScheduler(daemon=True, job_defaults={'max_instances': 3})
-
-# Create the job
-scheduler.add_job(func=server_request_events, trigger='interval', seconds=500)  # trigger='cron', hour='22', minute='30'
-scheduler.start()
+# scheduler = BackgroundScheduler(daemon=True, job_defaults={'max_instances': 3})
+#
+# # Create the job
+# scheduler.add_job(func=server_request_events, trigger='interval', seconds=5000)  # trigger='cron', hour='22', minute='30'
+# scheduler.start()

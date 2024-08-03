@@ -5,8 +5,8 @@ import os
 import logging
 
 
-download_folder = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/'
-download_folder_allmanif = 'C:/Users/User/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ'
+download_folder = 'C:/Users/79089/Desktop/ДОКУМЕНТЫ/'
+download_folder_allmanif = 'C:/Users/79089/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ'
 addition_folder = f'{download_folder}Места-Паллеты/'
 if not os.path.isdir(download_folder):
     os.makedirs(download_folder, exist_ok=True)
@@ -66,7 +66,6 @@ def create_databases():
                                                         """)
     con.commit()
     con.close()
-
     con = sl.connect('BAZA.db')
     with con:
         baza = con.execute("select count(*) from sqlite_master where type='table' and name='baza'")
@@ -93,6 +92,77 @@ def create_databases():
                                             goods
                                             );
                                         """)
+    with con:
+        baza = con.execute("select count(*) from sqlite_master where type='table' and name='parcels_refuses'")
+        for row in baza:
+            # если таких таблиц нет
+            if row[0] == 0:
+                # создаём таблицу
+                with con:
+                    con.execute("""
+                                                        CREATE TABLE parcels_refuses (
+                                                        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                                        user_id int (2),
+                                                        parcel_numb VARCHAR(20),
+                                                        parcel_plomb_numb VARCHAR(20),
+                                                        custom_status_short VARCHAR(8),
+                                                        parcel_find_status VARCHAR(8),
+                                                        goods,
+                                                        parcel_weight,
+                                                        time
+                                                        
+                                                        );
+                                                    """)
+    with con:
+        baza = con.execute("select count(*) from sqlite_master where type='table' and name='add_to_zone'")
+        for row in baza:
+            # если таких таблиц нет
+            if row[0] == 0:
+                # создаём таблицу
+                with con:
+                    con.execute("""
+                                    CREATE TABLE add_to_zone (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    user_id int (2),
+                                    parcel_numb VARCHAR(20),
+                                    zone VARCHAR(20),
+                                    UNIQUE(parcel_numb)
+                                    );
+                                """)
+
+    with con:
+        baza = con.execute("select count(*) from sqlite_master where type='table' and name='add_to_place'")
+        for row in baza:
+            # если таких таблиц нет
+            if row[0] == 0:
+                # создаём таблицу
+                with con:
+                    con.execute("""
+                                    CREATE TABLE add_to_place (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    user_id int (2),
+                                    parcel_numb VARCHAR(20),
+                                    parcel_plomb_numb VARCHAR(20),
+                                    custom_status_short VARCHAR(8),
+                                    UNIQUE(parcel_numb)
+                                    );
+                                """)
+    with con:
+        baza = con.execute("select count(*) from sqlite_master where type='table' and name='add_to_pallet'")
+        for row in baza:
+            # если таких таблиц нет
+            if row[0] == 0:
+                # создаём таблицу
+                with con:
+                    con.execute("""
+                                    CREATE TABLE add_to_pallet (
+                                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    user_id int (2),
+                                    parcel_plomb_numb VARCHAR(10),
+                                    vector VARCHAR(50),
+                                    UNIQUE(parcel_plomb_numb)
+                                    );
+                                """)
     con.commit()
     con.close()
 

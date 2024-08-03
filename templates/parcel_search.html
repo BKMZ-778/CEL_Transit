@@ -1,17 +1,48 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% if audiofile != 'None' %}
+<audio autoplay="autoplay">
+    <source src="{{ url_for('static', filename=audiofile)}}"  type="audio/wav">
+</audio>
+{% endif %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+        <div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em; ">{{ message }}</div>
+    <body class="{{body}}" style="background: #FF9C9C; "></body>
+
+{% else %}
+
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
 <meta charset="utf-8">
 <title>Отбор посылок</title>
 <body>
-<dl>
  <dt>
+<dt>Пломба для отбора посылок
 </dl>
-<dl>
- <dt> Отбор посылок
-</dl>
-<form action="{{ url_for('get_parcel_info') }}" method="post">
-    <input type="search" name="parcel_numb" value="" required minlength="1" onload='this.click();' autofocus />
+<form action="{{ url_for('get_parcel_info_sql_first') }}" method="post">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" onload='this.click();' autofocus />
     <input type="submit" value="Search" />
   </form>
+<!--<dl>-->
+<!-- <dt> Отбор посылок-->
+<!--</dl>-->
+<!--<form action="{{ url_for('get_parcel_info') }}" method="post">-->
+<!--    <input type="search" name="parcel_numb" value="" required minlength="1" onload='this.click();' autofocus />-->
+<!--    <input type="submit" value="Search" />-->
+<!--  </form>-->
+
+     <p>
+    <p> </p>
+    <p> </p>
+  <a href="{{ url_for('add_to_zone')}} ">
+        <h2> Разместить на зону хранения </h2>
+    </a>
+
 {% endblock %}

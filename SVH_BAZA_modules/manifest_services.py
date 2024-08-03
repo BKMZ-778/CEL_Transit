@@ -187,13 +187,13 @@ def manifest_to_xls(df_manifest_total):
         df_total['Дата манифеста'] = now_time
 
         try:
-            df_all_sent = pd.read_excel(f'C:/Users/User/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ/{now_month}-ALL_Manifests.xlsx')
+            df_all_sent = pd.read_excel(f'C:/Users/79089/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ/{now_month}-ALL_Manifests.xlsx')
         except:
             df_all_sent = pd.DataFrame()
 
         df_all_sent_new = df_all_sent.append(df_total)
 
-        writer = pd.ExcelWriter(f'C:/Users/User/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ/{now_month}-ALL_Manifests.xlsx', engine='xlsxwriter')
+        writer = pd.ExcelWriter(f'C:/Users/79089/Desktop/ДОКУМЕНТЫ/ОТГРУЖЕННОЕ/{now_month}-ALL_Manifests.xlsx', engine='xlsxwriter')
         df_all_sent_new.to_excel(writer, sheet_name='Sheet1', index=False)
         for column in df_all_sent_new:
             column_width = max(df_all_sent_new[column].astype(str).map(len).max(), len(column))
@@ -383,11 +383,6 @@ def manifest_to_xls_GBS(df_manifest_total):
         ws[f'B{len_table + 1}'].alignment = Alignment(horizontal='center')
         ws.merge_cells(f'B{len_table + 1}:H{len_table + 1}')
 
-        """ws.column_dimensions['A'].width = 9
-        ws.column_dimensions['B'].width = 31
-        ws.column_dimensions['C'].width = 31
-        ws.column_dimensions['D'].width = 20
-        ws.column_dimensions['E'].width = 31"""
 
 
         wb.save(Manifest_name)

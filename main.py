@@ -27,12 +27,15 @@ triger_list = list(triger_dict.keys())
 
 
 selection1 = "ШАБЛОН МТК СЭЛ VL"
+
+
 def get_selection(selection):
     print(selection)
     global selection1
     selection1 = selection
     print(selection1)
     return selection1
+
 
 def check_party():
     num_party = entry_party.get()
@@ -138,6 +141,7 @@ def check_party():
         msg = f"Не удалось сформировать Warning list, возможно нет рисков, ошибки: {e}"
         mb.showinfo("Триггер", msg)
         pass
+
 
 def start():
     file_name_sample = f'{Sample_choice_var.get()}.xlsx'
@@ -473,19 +477,20 @@ def Specf():
     df = pd.read_excel('pac_for_spec.xlsx', sheet_name=0, engine='openpyxl', usecols='E,B,F,G,H,I,J,K,L,P')
 
     df_Specif_gr = df.groupby('КОД ТНВЭД', sort=False).sum()
-    df['Наименование'] = df['Наименование'] + ' ' + df['Кол.'].astype(str) + ' ' + 'ШТ'
-    df_text = df.groupby(['КОД ТНВЭД'])['Наименование'].apply(lambda x: ', '.join(x)).reset_index()
+    # df['Наименование'] = df['Наименование'] + ' ' + df['Кол.'].astype(str) + ' ' + 'ШТ'
+    # df_text = df.groupby(['КОД ТНВЭД'])['Наименование'].apply(lambda x: ', '.join(x)).reset_index()
+    # df_text = df.groupby(['КОД ТНВЭД'])['Наименование'].apply(lambda x: ', '.join(x)).reset_index()
 
     df['Размещен в мешках / Кол-во мешков'] = \
     df.drop_duplicates(subset=['КОД ТНВЭД', 'Пломба'], keep='first').groupby(['КОД ТНВЭД'])['Пломба'].transform('count')
 
-    df = df.drop(columns=['Наименование', 'Кол.', 'Мест', 'Вес брутто', 'Вес нетто', 'Стоимость'], axis=1)
+    df = df.drop(columns=['Кол.', 'Мест', 'Вес брутто', 'Вес нетто', 'Стоимость'], axis=1)
     df_Specification = pd.merge(df_Specif_gr, df, how='outer', left_on='КОД ТНВЭД',
                                 right_on='КОД ТНВЭД').drop_duplicates(subset='КОД ТНВЭД', keep='first')
-    df_Specification = pd.merge(df_Specification, df_text, how='outer', left_on='КОД ТНВЭД',
-                                right_on='КОД ТНВЭД').drop_duplicates(subset='КОД ТНВЭД', keep='first')
+    # df_Specification = pd.merge(df_Specification, df_text, how='outer', left_on='КОД ТНВЭД',
+    #                             right_on='КОД ТНВЭД').drop_duplicates(subset='КОД ТНВЭД', keep='first')
     writer = pd.ExcelWriter('TEXT.xlsx', engine='xlsxwriter')
-    df_Specification.to_excel(writer, sheet_name='Sheet1', index=False)
+    df.to_excel(writer, sheet_name='Sheet1', index=False)
     writer.save()
     df_Specification['№ П/П'] = np.arange(len(df_Specification))[::+1] + 1
     df_Specification = df_Specification.reindex(

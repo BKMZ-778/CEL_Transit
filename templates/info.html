@@ -3,7 +3,7 @@
 {% block content %}
 <dt> Посмотреть объект:
 <form action="{{ url_for('object_info') }}" method="post">
-    <input type="search" name="numb" value="" onload='this.click();' autofocus/>
+    <input type="search" name="numb" value="" onload='this.click();' required minlength="1" autofocus/>
     <input type="submit" value="Найти" />
   </form>
 
@@ -13,6 +13,7 @@
 {% if category == 'error' %}
 <div class="{{ category }}" style="border: 1px solid #FF4343;
     background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+    <body class="{{body}}" style="background: #FF9C9C; "></body>
         {% elif vector is none %}
 <div class="{{ category }}" >{{ message }}</div>
 {% elif "LAND" in vector %}

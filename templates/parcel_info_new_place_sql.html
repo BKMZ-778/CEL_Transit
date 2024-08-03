@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>{% block title %} {{parcel_numb}} {% endblock %}</h2>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+{% if category == 'error' %}
+<div class="{{ category }}" style="border: 1px solid #FF4343;
+    background: #FF9C9C; font-size: 2em;">{{ message }}</div>
+        {% elif vector is none %}
+<div class="{{ category }}" >{{ message }}</div>
+{% elif "LAND" in vector %}
+<div class="{{ category }}" style="border: 1px solid #000080;
+    background: #657fff; font-size: 2em;"> {{ message }} </div>
+{% else %}
+<div class="{{ category }}" style="border: 1px solid #2bb930;
+    background: #82e285; font-size: 2em;"> {{ message }} </div>
+
+{% endif %}
+  {% endfor %}
+{% endwith %}
+    <span class="badge badge-primary"> CEL Logistic </span>
+    <p>
+        <form action="{{ url_for('making_new_place_sql') }}" method="post">
+    <input type="search" name="parcel_numb" value="" required minlength="1" onload='this.click();' autofocus/>
+    <input type="submit" value="Search" />
+
+  </form>
+<p> </p>
+<dt> Номер места\мешка
+<form action="{{ url_for('add_to_place_button') }}" method="post">
+    <input type="search" name="parcel_plomb_numb" value="" required minlength="1" />
+    <input type="submit" value="Сформировать место" />
+  </form>
+<p> </p>
+    <p> {% for table in tables %}
+            {{titles[loop.index]}}
+            {{ table|safe }}
+        {% endfor %} </p>
+
+<form action="{{ url_for('delete_last_place_sql') }}" method="post">
+    <input type="submit" value="Удалить последнюю запись" />
+  </form>
+
+{% endblock %}

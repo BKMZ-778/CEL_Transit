@@ -6,30 +6,41 @@ import tkinter.messagebox as mb
 import datetime
 import numpy as np
 import openpyxl
+import requests
 import xlsxwriter
+import re
+import random
+import xml.etree.ElementTree as ET
+
+from openpyxl.styles import PatternFill
 
 now = datetime.datetime.now().strftime("%d.%m.%Y")
+
 
 def start():
     msg = "Выберите файл с реестром"
     mb.showinfo("批包括", msg)
     file_name = filedialog.askopenfilename()
-    df = pd.read_excel(file_name, sheet_name=0, header=None, engine='openpyxl',
-                   skiprows=1, usecols='A:I, K:T, V, AD', converters={7: str, 14: str, 15: str, 18: str})
     try:
-        df.columns = ['Номер отправления ИМ', 'Фамилия', 'Имя', 'Отчество',
-                      'Адрес получателя', 'Город', 'Область', 'Индекс', 'Телефон',
-                      'Количество единиц товара', 'Наименование товара', 'Стоимость ед. товарной позиции',
-                      'Ссылка на товар', 'Серия паспорта', 'Номер паспорта', 'Дата выдачи', 'Дата рождения',
-                      'Идентификационный налоговый номер', 'Вес брутто (Вес позиции)', 'Клиент', 'Емейл']
-    except:
-        df.columns = ['Номер отправления ИМ', 'Фамилия', 'Имя', 'Отчество',
-                      'Адрес получателя', 'Город', 'Область', 'Индекс', 'Телефон',
-                      'Количество единиц товара', 'Наименование товара', 'Стоимость ед. товарной позиции',
-                      'Ссылка на товар', 'Серия паспорта', 'Номер паспорта', 'Дата выдачи', 'Дата рождения',
-                      'Идентификационный налоговый номер', 'Вес брутто (Вес позиции)', 'Клиент']
-    len_df_income = len(df)
+        df = pd.read_excel(file_name, sheet_name=0, header=None, engine='openpyxl',
+                   skiprows=1, usecols='A:I, K:T, V, W, AD', converters={7: str, 14: str, 15: str, 18: str})
 
+        df.columns = ['Номер накладной СДЭК', 'Фамилия', 'Имя', 'Отчество',
+                      'Адрес получателя', 'Город', 'Область', 'Индекс', 'Телефон',
+                      'Количество единиц товара', 'Наименование товара', 'Стоимость ед. товарной позиции',
+                      'Ссылка на товар', 'Серия паспорта', 'Номер паспорта', 'Дата выдачи', 'Дата рождения',
+                      'Идентификационный налоговый номер', 'Вес брутто (Вес позиции)', 'Клиент', 'Номер отправления ИМ', 'Емейл']
+    except:
+
+        df = pd.read_excel(file_name, sheet_name=0, header=None, engine='openpyxl',
+                           skiprows=1, usecols='A:I, K:T, V, W', converters={7: str, 14: str, 15: str, 18: str})
+        df.columns = ['Номер накладной СДЭК', 'Фамилия', 'Имя', 'Отчество',
+                      'Адрес получателя', 'Город', 'Область', 'Индекс', 'Телефон',
+                      'Количество единиц товара', 'Наименование товара', 'Стоимость ед. товарной позиции',
+                      'Ссылка на товар', 'Серия паспорта', 'Номер паспорта', 'Дата выдачи', 'Дата рождения',
+                      'Идентификационный налоговый номер', 'Вес брутто (Вес позиции)', 'Клиент', 'Номер отправления ИМ']
+    len_df_income = len(df)
+    print(len_df_income)
     df['Фамилия'] = df["Фамилия"].str.replace("\W+", " ", regex=True)
     df['Стоимость ед. товарной позиции'] = df['Стоимость ед. товарной позиции'].replace(to_replace=',,', value='.', regex=True)
     df['Стоимость ед. товарной позиции'] = df['Стоимость ед. товарной позиции'].replace(to_replace='\.\.', value='.', regex=True)
@@ -51,7 +62,7 @@ def start():
         mb.showinfo("Информация", msg)
     else:
         pass
-
+    #df['Наименование товара'] = df['Наименование товара'].replace(to_replace='&', value='', regex=True)
     df['Стоимость позиции'] = df['Количество единиц товара'].multiply(df['Стоимость ед. товарной позиции'], axis='index')
     df['Вес брутто (Вес позиции)'] = df['Вес брутто (Вес позиции)'].replace(to_replace=',,', value='.', regex=True)
     df['Вес брутто (Вес позиции)'] = df['Вес брутто (Вес позиции)'].replace(to_replace='\.\.', value='.', regex=True)
@@ -71,6 +82,7 @@ def start():
         mb.showinfo("Информация", msg)
     else:
         pass
+    print('weight ok')
     df['Дата выдачи'] = df['Дата выдачи'].replace(to_replace=',', value='.', regex=True)
     df['Дата рождения'] = df['Дата рождения'].replace(to_replace=',', value='.', regex=True)
     try:
@@ -91,10 +103,13 @@ def start():
     except Exception as e:
         msg = f"Проверьте Дату рождения, есть кривые значения!\n\nТекст ошибки:\n\n{e}"
         mb.showinfo("Информация", msg)
-
+    print('dates ok')
     df['Телефон'] = df['Телефон'].astype(str)
     df['Телефон'] = df['Телефон'] = df['Телефон'].replace(to_replace='\D', value='', regex=True)
+    i = 0
     for col in df['Телефон']:
+        i += 1
+        print(i, col)
         try:
             len_phone = len(col)
             if len_phone == 12:
@@ -103,27 +118,15 @@ def start():
                 df.loc[df['Телефон'] == col, 'Телефон'] = f'7{col}'
             if len_phone == 9:
                 df.loc[df['Телефон'] == col, 'Телефон'] = f'79{col}'
-
-        except Exception as e:
-            msg = f"Проверьте Телефоны!\n\nТекст ошибки:\n\n{e}"
-            mb.showinfo("Информация", msg)
-
-    for col in df['Телефон']:
-        try:
             if col[0] != '7':
                 df.loc[df['Телефон'] == col, 'Телефон'] = '7' + col[1:]
-        except Exception as e:
-            msg = f"Проверьте Телефоны!\n\nТекст ошибки:\n\n{e}"
-            mb.showinfo("Информация", msg)
-
-    for col in df['Телефон']:
-        try:
             if col[1] != '9':
                 df.loc[df['Телефон'] == col, 'Телефон'] = '79' + col[2:]
         except Exception as e:
             msg = f"Проверьте Телефоны!\n\nТекст ошибки:\n\n{e}"
             mb.showinfo("Информация", msg)
 
+    print('phone ok')
     df['Серия паспорта'] = df['Серия паспорта'].astype(str)
 
     df['Серия паспорта'] = df['Серия паспорта'] = df['Серия паспорта'].replace(to_replace='\W', value='', regex=True)
@@ -133,22 +136,33 @@ def start():
     df['Номер паспорта'] = df['Номер паспорта'].astype(str)
     df['Номер паспорта'] = df['Номер паспорта'] = df['Номер паспорта'].replace(to_replace='\W', value='', regex=True)
     df['Номер паспорта'] = df['Номер паспорта'] = df['Номер паспорта'].replace(to_replace='\s', value='', regex=True)
-
+    i = 0
     for col in df['Номер паспорта']:
+        i += 1
         if len(col) == 5:
             df.loc[df['Номер паспорта'] == col, 'Номер паспорта'] = f'0{col}'
         elif len(col) == 4:
             df.loc[df['Номер паспорта'] == col, 'Номер паспорта'] = f'00{col}'
+        if any(c.isalpha() for c in col):
+            try:
+                chars = re.findall(r'[a-zA-Z]+', col)[0]
+                if chars != 'nan':
+                    print(col)
+                    print("alpha")
+                    print(chars)
+                    df.loc[df['Номер паспорта'] == col, 'Серия паспорта'] = f'{chars}'
+                    print(df.loc[df['Номер паспорта'] == col, 'Серия паспорта'])
+            except:
+                print('error', col)
 
-
-
-    df_group = df.groupby('Номер отправления ИМ', sort=False)[['Вес брутто (Вес позиции)', 'Стоимость позиции']].sum()
+    print('pass numb ok')
+    df_group = df.groupby('Номер накладной СДЭК', sort=False)[['Вес брутто (Вес позиции)', 'Стоимость позиции']].sum()
 
     df_group = df_group.rename(columns={'Вес брутто (Вес позиции)': 'Общий Вес места (накладной)',
                                         'Стоимость позиции': 'Общая стоимость накладной(посылки)'})
 
-    df = pd.merge(df, df_group, how='left', left_on='Номер отправления ИМ', right_on='Номер отправления ИМ')
-
+    df = pd.merge(df, df_group, how='left', left_on='Номер накладной СДЭК', right_on='Номер накладной СДЭК')
+    print('merge ok')
     msg = "Выберите файл с загрузкой по мешкам"
     mb.showinfo("批所有", msg)
     file_name1 = filedialog.askopenfilename()
@@ -169,31 +183,37 @@ def start():
     msg = f"вес брутто {weight_brut},\n вес нетто {weight_net},\n кол-во упаковок (пломб) {count_chinabag},\n\n Вес единицы упаковки {Chinabag_weight}"
     mb.showinfo("Информация по загрузке", msg)
     print(df_w)
-    test_cmpr_df = df['Номер отправления ИМ'].drop_duplicates().dropna()
+    test_cmpr_df = df['Номер накладной СДЭК'].drop_duplicates().dropna()
     test_cmpr_df_w = df_w['Номер накладной'].dropna()
 
     for i in test_cmpr_df:
+        print(f'{i} test1')
         test_comp1 = test_cmpr_df_w.isin([i]).any()
         if test_comp1 == False:
             msg = f"Накладная {i} не найдена в загрузке"
             mb.showerror("Ошибка", msg)
 
     for i in test_cmpr_df_w:
+        print(f'{i} test2')
         test_comp2 = test_cmpr_df.isin([i]).any()
         if test_comp2 == False:
             msg = f"Накладная {i} лишняя в загрузке"
             mb.showerror("Ошибка", msg)
 
-    df = pd.merge(df, df_w, how='left', left_on='Номер отправления ИМ' , right_on='Номер накладной')
-
+    df = pd.merge(df, df_w, how='left', left_on='Номер накладной СДЭК' , right_on='Номер накладной')
+    print('merge df, df_w ok')
     df['Вес нетто'] = np.round(df['вес Накладной по загрузке'] / df['Общий Вес места (накладной)'] * df['Вес брутто (Вес позиции)'],
                                decimals=3)
     df_pc_qt = df['Номер пломбы'].value_counts()
     df = pd.merge(df, df_pc_qt, how='left', left_on='Номер пломбы', right_index=True)
 
+    df['Номер пломбы'] = df['Номер пломбы_x']
+    print('merge df, df_pc_qt ok')
     df['Вес брутто (Вес позиции)'] = df['Вес нетто'] + np.round(Chinabag_weight / df['Номер пломбы_y'], decimals=3)
     print(df['Вес брутто (Вес позиции)'])
-    df['Общий Вес места (накладной)'] = df.groupby('Номер отправления ИМ')['Вес брутто (Вес позиции)'].transform('sum')
+    df['Общий Вес места (накладной)'] = df.groupby('Номер накладной СДЭК')['Вес брутто (Вес позиции)'].transform('sum')
+    df['Орган выдачи'] = 'УФМС России'
+    df['Код страны получателя'] = 'RU'
     try:
         df['Отчество'] = df['Отчество'].replace(0, '')
         df['Фамилия'] = df['Фамилия'].replace(0, '')
@@ -203,7 +223,26 @@ def start():
     except:
         msg = f"в столбцах ФИО получателя есть числа вместо текста.\n\nЛучше проверить, исправить и начать заново"
         mb.showerror("Ошибка", msg)
-    df['Орган выдачи'] = 'УФМС России'
+    country_dict = {'УФМС Узбекистана': 'UZ', 'УФМС Казахстана': 'KZ',
+                    'УФМС Азербайджана': 'AZ', 'УФМС Армении': 'AM',
+                    'УФМС Беларуси': 'BY', 'УФМС Киргизии': 'KG'}
+    for col in df['Серия паспорта']:
+        if any(c.isalpha() for c in col) and col != 'nan':
+            fio = df.loc[df['Серия паспорта'] == col, 'ФИО получателя'].values[0]
+            print(fio)
+            if 'оглы' in str.lower(fio) or 'углы' in str.lower(fio) or 'угли' in str.lower(fio) or 'ugli' in str.lower(fio) or 'ogli' in str.lower(fio) or 'ahmed' in str.lower(fio):
+                df.loc[df['Серия паспорта'] == col, 'Орган выдачи'] = f'УФМС Узбекистана'
+                df.loc[df['Серия паспорта'] == col, 'Код страны получателя'] = f'UZ'
+            if 'кызы' in str.lower(fio) or 'kizi' in str.lower(fio):
+                df.loc[df['Серия паспорта'] == col, 'Орган выдачи'] = f'УФМС Казахстан'
+                df.loc[df['Серия паспорта'] == col, 'Код страны получателя'] = f'KZ'
+            else:
+                print(col)
+                org_issue, countru_code = random.choice(list(country_dict.items()))
+                print(org_issue, countru_code)
+                df.loc[df['Серия паспорта'] == col, 'Орган выдачи'] = f'{org_issue}'
+                df.loc[df['Серия паспорта'] == col, 'Код страны получателя'] = f'{countru_code}'
+
     df['Код ТН ВЭД'] = None
     df['Длина коробки, см'] = None
     df['Ширина, см'] = None
@@ -219,11 +258,9 @@ def start():
     df['Страна отправления'] = 'CN'
     df['Торгующая страна'] = 'CN'
     df['Условия поставки'] = 'DAP'
-    df['Код страны получателя'] = 'RU'
+
     df['Краткое наименование страны получателя'] = 'Россия'
     df['Код документа (паспорта)'] = '21'
-    df['Номер накладной СДЭК'] = df['Номер отправления ИМ']
-    df['Номер пломбы'] = df['Номер пломбы_x']
     df['Ссылка на товар'] = df['Ссылка на товар'].str.slice(0, 250)
     df['Город'] = df['Город'].str.slice(0, 34)
     df['Область'] = df['Область'].str.slice(0, 34)
@@ -250,6 +287,7 @@ def start():
                                                               regex=True)
     df['Примечание'] = df['Примечание'].replace(to_replace='到门', value='JD-AIR',
                                                               regex=True)
+
     df = df.reindex(columns=['Номер отправления ИМ', 'Номер пломбы', 'ФИО получателя', 'Фамилия',
                           'Имя', 'Отчество', 'Индекс', 'Область', 'Город', 'Адрес получателя', 'Телефон',
                           'Емейл', 'Серия паспорта', 'Номер паспорта', 'Дата выдачи', 'Орган выдачи', 'Дата рождения',
@@ -265,12 +303,13 @@ def start():
     print(len_df_income)
     len_df_finish = len(df)
     print(len_df_finish)
-    df = df.sort_values(['Номер пломбы', 'Номер отправления ИМ'], ascending=[True, True])
+    df = df.sort_values(['Номер пломбы', 'Номер накладной СДЭК'], ascending=[True, True])
     writer = pd.ExcelWriter(f'Шаблон_{party_numb}.xlsx', engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Sheet1', index=False)
-    writer.save()
+    writer.close()
     msg = "Шаблон сформирован!"
     mb.showinfo("Информация", msg)
+
 
 def divide_df():
     party_numb = entry_party.get()
@@ -296,43 +335,134 @@ def divide_df():
     else:
         writer = pd.ExcelWriter(f'Шаблон_{party_numb}-others.xlsx', engine='xlsxwriter')
         df_others.to_excel(writer, sheet_name='Sheet1', index=False)
-        writer.save()
+        writer.close()
     if df_LD.empty:
         pass
     else:
         writer = pd.ExcelWriter(f'Шаблон_{party_numb}-LD.xlsx', engine='xlsxwriter')
         df_LD.to_excel(writer, sheet_name='Sheet1', index=False)
-        writer.save()
+        writer.close()
     if df_JD.empty:
         pass
     else:
         writer = pd.ExcelWriter(f'Шаблон_{party_numb}-JD.xlsx', engine='xlsxwriter')
         df_JD.to_excel(writer, sheet_name='Sheet1', index=False)
-        writer.save()
+        writer.close()
 
     writer = pd.ExcelWriter(f'Шаблон_{party_numb}- Для СВХ.xlsx', engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Sheet1', index=False)
-    writer.save()
+    writer.close()
 
 
     msg = "Шаблон разделен!"
     mb.showinfo("Информация", msg)
 
+
+def get_currency_rate(char_code_currency="USD"):
+    """
+    :param char_code_currency: can see here - https://www.cbr.ru/scripts/XML_daily.asp
+    :return: float_number
+    """
+    return float(
+    ET.fromstring(requests.get('https://www.cbr.ru/scripts/XML_daily.asp').text).find(
+    './Valute[CharCode="EUR"]/Value').text.replace(',', '.')
+    )
+
+
+def commerce_products_search():
+    filename = filedialog.askopenfilename()
+    df = pd.read_excel(filename, sheet_name=0, engine='openpyxl', header=None, usecols='T, U, AO', skiprows=1, converters={1: str})
+    df.columns = ['description', 'tnvedCode', 'track']
+    df = df.reindex(columns=['track', 'description', 'tnvedCode'])
+    print(df)
+    df['tnvedCode9'] = df['tnvedCode'].str[:9]
+    df['tnvedCode6'] = df['tnvedCode'].str[:6]
+    df['tnvedCode4'] = df['tnvedCode'].str[:4]
+
+    df_warnings = pd.read_excel('TNVEDнедляличного.xlsx', sheet_name=0, engine='openpyxl', usecols='A, B, C, D', converters={'triger_tnved': str,
+                                                                                                                       'exclud': str})
+
+    df_merged_10 = pd.merge(df, df_warnings, how='left', left_on='tnvedCode', right_on='triger_tnved')
+    df_merged_9 = pd.merge(df_merged_10, df_warnings, how='left', left_on='tnvedCode9', right_on='triger_tnved')
+    df_merged_6 = pd.merge(df_merged_9, df_warnings, how='left', left_on='tnvedCode6', right_on='triger_tnved')
+    df_merged_4 = pd.merge(df_merged_6, df_warnings, how='left', left_on='tnvedCode4', right_on='triger_tnved')
+
+    df_merged_4.columns = ['track', 'description', 'tnvedCode', 'tnvedCode9', 'tnvedCode6', 'tnvedCode4', 'Триггер_код', 'Описание группы/запрет'
+                           , 'Постановление', 'Искл.', 'По 9 знакам', 'Описание группы/запрет_9', 'Постановление_9', 'Искл._9',
+                           'По 6 знакам', 'Описание группы/запрет_6', 'Постановление_6', 'Искл._6'
+                           , 'По 4 знакам', 'Описание группы/запрет_4', 'Постановление_4', 'Искл._4']
+    df = df_merged_4
+    df = df.drop('Искл.', axis=1)
+    df = df.drop('Искл._6', axis=1)
+    df = df.drop('Искл._9', axis=1)
+    #df['Искл._4'] = df['Искл._4']
+
+    df['Постановление'] = df['Постановление'].fillna(df['Постановление_9'])
+    df['Постановление'] = df['Постановление'].fillna(df['Постановление_6'])
+    df['Постановление'] = df['Постановление'].fillna(df['Постановление_4'])
+
+    df['Триггер_код'] = df['Триггер_код'].fillna(df['По 9 знакам'])
+    df['Триггер_код'] = df['Триггер_код'].fillna(df['По 6 знакам'])
+    df['Триггер_код'] = df['Триггер_код'].fillna(df['По 4 знакам'])
+
+    df['Описание группы/запрет'] = df['Описание группы/запрет'].fillna(df['Описание группы/запрет_9'])
+    df['Описание группы/запрет'] = df['Описание группы/запрет'].fillna(df['Описание группы/запрет_6'])
+    df['Описание группы/запрет'] = df['Описание группы/запрет'].fillna(df['Описание группы/запрет_4'])
+
+    df = df.drop('tnvedCode9', axis=1)
+
+    df = df.reindex(columns=['description', 'tnvedCode', 'tnvedCode6', 'tnvedCode4', 'Триггер_код', 'Описание группы/запрет'
+                           , 'Постановление', 'Искл.', 'track'])
+
+    writer = pd.ExcelWriter(f'TNVED_commerce.xlsx', engine='openpyxl')
+    df.to_excel(writer, sheet_name='Sheet1', index=False)
+    writer.close()
+
+    df_trigger_words_export = pd.read_excel("trigger_words_commerce.xlsx", header=None)
+    list_of_trigger_words = df_trigger_words_export[0].to_list()
+    wb = openpyxl.load_workbook('TNVED_commerce.xlsx')
+    ws = wb.active
+    orangeFill = PatternFill(start_color='FFA500', end_color='FFA500', fill_type='solid')
+    redFill = PatternFill(start_color='FF0000', end_color='FF0000', fill_type='solid')
+    pinkFill = PatternFill(start_color='FFC0CB', end_color='FFC0CB', fill_type='solid')
+
+    i = 0
+    for row in ws['B']:
+        i += 1
+        tnved = str(row.value)
+        for triger_word in list_of_trigger_words:
+            if triger_word in ws[f'A{i}'].value.lower():
+                ws[f'A{i}'].fill = orangeFill
+        if ws[f'E{i}'].value is not None and i != 1:
+            print(ws[f'E{i}'].value)
+            ws[f'A{i}'].fill = redFill
+            ws[f'B{i}'].fill = redFill
+            ws[f'E{i}'].fill = redFill
+
+
+    wb.save('TNVED_commerce.xlsx')
+    msg = "ГОТОВО!"
+    mb.showinfo("ИНФО", msg)
+
+
 window = tk.Tk()
 window.title('Формирование шаблона OZON/CEL')
-window.geometry("500x150+400+400")
+window.geometry("500x250+400+400")
 name = tk.Label(window, text="Номер CMR")
 
-a = tk.StringVar(value='OZON-20')
+a = tk.StringVar(value='OZON-4')
 entry_party = tk.Entry(window,  width=20, textvariable=a)
 
 
-button = tk.Button(text="Делаем шаблон!", width=14, height=2, bg="lightgrey", fg="black", command=start)
+button = tk.Button(text="Делаем шаблон!", width=20, height=2, bg="lightgrey", fg="black", command=start)
 button.configure(font=('hank', 10))
-button_divide = tk.Button(text="Разделить", width=14, height=2, bg="lightgrey", fg="black", command=divide_df)
+button_divide = tk.Button(text="Разделить", width=20, height=2, bg="lightgrey", fg="black", command=divide_df)
 button_divide.configure(font=('hank', 10))
+button3 = tk.Button(text="Выделить не для личного пользования", width=30, height=2, bg="lightgrey", fg="black", command=commerce_products_search)
+button3.configure(font=('hank', 10))
 name.pack()
 entry_party.pack()
 button.pack()
 button_divide.pack()
+button3.pack()
 window.mainloop()

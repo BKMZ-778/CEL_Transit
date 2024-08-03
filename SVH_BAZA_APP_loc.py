@@ -1,3 +1,14 @@
+import base64
+import hashlib
+import time
+import traceback
+#from mysql.connector import connect, Error
+import flask
+import requests
+from apscheduler.schedulers.background import BackgroundScheduler
+from waitress import serve
+from urllib.parse import urlparse
+import logging
 from flask import Flask, jsonify, request, render_template, redirect, url_for, send_file
 from flask import abort
 from flask import flash
@@ -10,6 +21,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import os
+from flask import Flask, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_restful import Resource, Api
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -25,13 +37,16 @@ from flask_jwt_extended import (
     get_jwt_identity, set_access_cookies, unset_jwt_cookies)
 
 from SVH_BAZA_modules import manifest_services, party_to_pallet, api_views, pallet_views
+from SVH_BAZA_modules.api_views import server_request_events, check_and_backup
+from SVH_BAZA_modules.parcel_services import search_parcel_sql_service, add_to_zone_service, add_to_place_sql_service
 from SVH_BAZA_modules.plomb_services import get_plomb_come_work_service
 from schemas import UserSchema, AuthSchema
 import winsound
 from SVH_BAZA_modules import parcel_services
 from SVH_BAZA_modules.services import (insert_user_action, map_eng_to_rus, download_folder, addition_folder,
                                        create_databases, logger, logger_change_plob, style, get_user_name)
-from SVH_BAZA_modules.load_excel_service import load_sample_manifest_service, load_decisions_service
+from SVH_BAZA_modules.load_excel_service import (load_sample_manifest_service, load_decisions_service,
+                                                 )
 
 app_svh = Flask(__name__)
 
@@ -70,6 +85,28 @@ now_time = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
 
 # create all databases and tables initial
 create_databases()
+
+
+db_url = "mysql+mysqlconnector://{USER}:{PWD}@{HOST}/{DBNAME}"
+db_url = db_url.format(
+    USER="root",
+    PWD="jPouKY2zy3R6",
+    HOST="localhost",
+    DBNAME="baza",
+    auth_plugin='mysql_native_password'
+)
+#engine = create_engine(db_url, echo=False)
+
+def setup_logger(name, log_file, level=logging.INFO):
+    logging.basicConfig(format=u'%(levelname)-8s [%(asctime)s] %(message)s')  # filename=u'mylog.log'
+    handler = logging.FileHandler(log_file)
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
+
+
+logger_GBS_statuses = setup_logger('logger_GBS_statuses', 'logger_GBS_statuses.log')
 
 
 class UserLogin(Resource):
@@ -271,7 +308,7 @@ def parties_analitic():
     con.row_factory = sl.Row
     with con:
         len_id = con.execute('SELECT max(id) from baza').fetchone()[0]
-        id_for_job = len_id - 100000
+        id_for_job = len_id - 150000
         data = f"Select DISTINCT ID, party_numb from baza where ID > {id_for_job}"
         # data_df = pd.DataFrame(data)
         data_df = pd.read_sql(data, con).sort_values(by='ID', ascending=False)
@@ -284,7 +321,8 @@ def parties_analitic():
         data2 = f'Select party_numb, parcel_plomb_numb, parcel_numb, custom_status_short, custom_status, VH_status, parcel_weight  from baza where party_numb in {tuple_of_parties}'
         parts_analit_table = pd.read_sql(data2, con)
         print(parts_analit_table)
-
+    hostname = request.headers.get('Host')
+    print(hostname)
 
 @app_svh.route('/')
 def fetchmany_party():
@@ -292,7 +330,7 @@ def fetchmany_party():
     con.row_factory = sl.Row
     with con:
         len_id = con.execute('SELECT max(id) from baza').fetchone()[0]
-        id_for_job = len_id - 100000
+        id_for_job = len_id - 150000
         data_start = f"Select DISTINCT ID, party_numb from baza where ID > {id_for_job}"
         # data_df = pd.DataFrame(data)
         data_df = pd.read_sql(data_start, con).sort_values(by='ID', ascending=False)
@@ -358,7 +396,7 @@ def all_not_shipped():
     global df_not_shipped
     con = sl.connect('BAZA.db')
     with con:
-        df_not_shipped = pd.read_sql("Select * from baza where VH_status != 'ОТГРУЖЕН' and custom_status != 'Unknown'",
+        df_not_shipped = pd.read_sql("Select * from baza where VH_status != 'ОТГРУЖЕН'",
                                      con)
         df_not_shipped['decision_date'] = df_not_shipped['decision_date'].str.slice(0, 17)
         df_not_shipped = df_not_shipped.rename(columns=map_eng_to_rus)
@@ -404,11 +442,14 @@ def object_info():
         df['decision_date'] = df['decision_date'].str.slice(0, 17)
         df = df.rename(columns=map_eng_to_rus)
         if df['Статус ТО (кратк)'].str.contains("ИЗЪЯТИЕ").any():
-            if 'Требуется' in df['Статус ТО'].values[0] or 'уплат' in \
-                    df['Причина отказа'].values[0] or 'Не уплачены' in \
-                    df['Причина отказа'].values[0]:
-                pay_trigger = 'ПЛАТНАЯ'
-            else:
+            try:
+                if 'Требуется' in df['Статус ТО'].values[0] or 'уплат' in \
+                        df['Причина отказа'].values[0] or 'Не уплачены' in \
+                        df['Причина отказа'].values[0]:
+                    pay_trigger = 'ПЛАТНАЯ'
+                else:
+                    pay_trigger = ''
+            except:
                 pay_trigger = ''
             flash(f'ИЗЪЯТИЕ на склад {pay_trigger}', category='error')
         elif df['Статус ТО (кратк)'].str.contains("ВЫПУСК").any():
@@ -723,13 +764,15 @@ def check_refuses_work(party_numb):
                 f"Update party_refuses set parcel_find_status = 'НАЙДЕНА' where parcel_numb = '{parcel_numb}'")
 
             df_parc_events = pd.read_sql(f"SELECT * FROM baza where parcel_numb = '{parcel_numb}'", con)
-            if 'Требуется' in df_parc_events['custom_status'].values[0] or 'уплат' in \
-                    df_parc_events['refuse_reason'].values[0] or 'Не уплачены' in df_parc_events['refuse_reason'].values[0]:
-                pay_trigger = 'ПЛАТНАЯ'
-                flash(f'{pay_trigger}', category='error')
-            else:
+            try:
+                if 'Требуется' in df_parc_events['custom_status'].values[0] or 'уплат' in \
+                        df_parc_events['refuse_reason'].values[0] or 'Не уплачены' in df_parc_events['refuse_reason'].values[0]:
+                    pay_trigger = 'ПЛАТНАЯ'
+                    flash(f'{pay_trigger}', category='error')
+                else:
+                    pay_trigger = ''
+            except:
                 pay_trigger = ''
-
         df = pd.read_sql(f"SELECT * FROM party_refuses where party_numb = '{party_numb}' COLLATE NOCASE", con)
         df['№'] = np.arange(len(df))[::+1] + 1
         df = df[['№', 'party_numb', 'parcel_numb', 'parcel_find_status']]
@@ -848,6 +891,7 @@ def plomb():
 
 
 @app_svh.route('/pallet', methods=['GET'])
+@jwt_required()
 def pallet():
     return render_template('pallet.html')
 
@@ -1040,7 +1084,7 @@ def get_parcel_info():
     try:
         (df_parcel_plomb_refuse_info, done_parcels_styl, parcel_numb, audiofile,
          df_parc_quont, df_parc_refuse_quont,
-         done_parcels) = parcel_services.get_parcel_info_service(done_parcels)
+         done_parcels, parcel_plomb_numb) = parcel_services.get_parcel_info_service(done_parcels)
         return render_template('parcel_info.html', tables=[
             df_parcel_plomb_refuse_info.to_html(classes='mystyle',
                                                 index=False,
@@ -1059,6 +1103,83 @@ def get_parcel_info():
         return render_template('parcel_info.html', audiofile=audiofile)
 
 
+@app_svh.route('/search/parcel_info_sql_first', methods=['POST', 'GET'])
+def get_parcel_info_sql_first():
+    try:
+        user_name, user_id = get_user_name()
+        con = sl.connect("BAZA.db")
+        parcel_plomb_numb = request.form['parcel_plomb_numb']
+        with con:
+            df_plomb = pd.read_sql(
+                f"SELECT parcel_numb, parcel_plomb_numb, custom_status_short, goods, parcel_weight FROM baza where parcel_plomb_numb = '{parcel_plomb_numb}'",
+                con)
+            if not df_plomb.empty:
+                df_plomb['user_id'] = user_id
+                print(df_plomb)
+                df = pd.read_sql(f"Select * from parcels_refuses where parcel_plomb_numb = '{parcel_plomb_numb}'", con)
+                print(df)
+                if df.empty:
+                    df_plomb.to_sql("parcels_refuses", con, if_exists='append', index=False)
+                else:
+                    for parcel_numb in df['parcel_numb']:
+                        custom_status_short = df_plomb.loc[df_plomb['parcel_numb'] == parcel_numb]['custom_status_short'].values[0]
+                        con.execute(f"Update parcels_refuses set user_id = {user_id}, custom_status_short = '{custom_status_short}' where parcel_numb = '{parcel_numb}'")
+                df = pd.read_sql(
+                        f"SELECT user_id, parcel_numb, parcel_plomb_numb, custom_status_short, parcel_find_status, goods, parcel_weight FROM parcels_refuses where parcel_plomb_numb = '{parcel_plomb_numb}'",
+                        con)
+                print(df)
+                df_refuses = df.loc[df['custom_status_short'] == "ИЗЪЯТИЕ"].fillna('')
+                qt_refuse = len(df_refuses)
+                qt_all = len(df_plomb)
+                qt_found = len(df_refuses.loc[df_refuses['parcel_find_status'] == 'НАЙДЕНА'])
+
+                if qt_refuse == qt_found:
+                    flash(f'Все отказы найдены!', category='success')
+                df_refuses['№'] = np.arange(len(df_refuses))[::+1] + 1
+                df_refuses = df_refuses[
+                    ['№', 'parcel_numb', 'parcel_find_status', 'custom_status_short', 'goods', 'user_id']]
+                print(df_refuses)
+                object_name = parcel_plomb_numb
+                comment = f'Отбор посылок: Начат отбор по пломбе'
+                insert_user_action(object_name, comment)
+                if df_refuses.empty:
+                    flash(f'Все место выпущено!', category='success')
+                    audiofile = 'Snd_All_Issue.wav'
+                    return render_template('parcel_search.html', audiofile=audiofile)
+                else:
+                    audiofile = 'Snd_CancelIssue.wav'
+                    return render_template('parcel_info_sql.html',
+                                           parcel_plomb_numb=parcel_plomb_numb, qt_refuse=qt_refuse, qt_all=qt_all, qt_found=qt_found,
+                                           tables=[style + df_refuses.to_html(classes='mystyle', index=False,
+                                                                                            float_format='{:2,.2f}'.format)],
+                                           audiofile=audiofile,
+                                            titles=['Информация'])
+            else:
+                flash(f'Место {parcel_plomb_numb} не найдено!', category='error')
+        return render_template('parcel_search.html',
+                               parcel_plomb_numb=parcel_plomb_numb)
+    except Exception as e:
+        flash(f'Место не найдено! ошибка: {e}', category='error')
+    return render_template('parcel_search.html')
+
+
+@app_svh.route('/search/parcel_info_sql', methods=['POST', 'GET'])
+def get_parcel_info_sql():
+    try:
+        parcel_numb, parcel_plomb_numb, audiofile, df_refuses, qt_refuse, qt_all, qt_found = search_parcel_sql_service()
+        print(parcel_plomb_numb)
+        return render_template('parcel_info_sql.html', parcel_numb=parcel_numb,
+                           parcel_plomb_numb=parcel_plomb_numb, qt_refuse=qt_refuse, qt_all=qt_all, qt_found=qt_found,
+                           audiofile=audiofile, tables=[style + df_refuses.to_html(classes='mystyle', index=False,
+                                                                                float_format='{:2,.2f}'.format)],
+                           titles=['Информация'])
+    except Exception as e:
+        print(e)
+        flash(f'Посылка не найдена!', category='error')
+        # winsound.PlaySound('Snd\Snd_Parcel_Not_Found.wav', winsound.SND_FILENAME)
+        audiofile = 'Snd_CancelIssue.wav'
+        return render_template('parcel_info_sql.html', audiofile=audiofile)
+
 @app_svh.route('/search/clean', methods=['POST'])
 def clean_working_place():
     global done_parcels
@@ -1069,6 +1190,22 @@ def clean_working_place():
     insert_user_action(object_name, comment)
 
     return render_template('parcel_info.html')
+
+
+@app_svh.route('/search/clean_working_place_sql', methods=['POST'])
+def clean_working_place_sql():
+    parcel_plomb_numb = request.args.get('parcel_plomb_numb')
+    print(parcel_plomb_numb)
+    df_refuses = parcel_services.clean_working_place_sql_service(parcel_plomb_numb)
+    if not df_refuses.empty:
+        object_name = parcel_plomb_numb
+        comment = f'Отбор посылок: Завершено место {parcel_plomb_numb}'
+        insert_user_action(object_name, comment)
+        flash(f'Завершено место {parcel_plomb_numb}', category='success')
+        return render_template('parcel_search.html')
+    else:
+        flash(f'Ошибка завершения места (Проверьте user_id)!', category='error')
+        return render_template('parcel_search.html')
 
 
 parcel_plomb_numb = None
@@ -1233,12 +1370,12 @@ def save_manifest(partner):
         print(ploms_to_manifest)
         for parcel_plomb_numb in ploms_to_manifest:
             print(parcel_plomb_numb)
-            i += 1
-            con.execute(
-                "Update baza set VH_status = 'ОТГРУЖЕН' where parcel_plomb_numb = ? and custom_status_short = ?",
-                (parcel_plomb_numb, 'ВЫПУСК'))
-            con.commit()
-            print(f'{i} - {parcel_plomb_numb} updated')
+            with con:
+                i += 1
+                con.execute(
+                    "Update baza set VH_status = 'ОТГРУЖЕН' where parcel_plomb_numb = ? and custom_status_short = ?",
+                    (parcel_plomb_numb, 'ВЫПУСК'))
+                print(f'{i} - {parcel_plomb_numb} updated')
         logger.warning(df_manifest_total)
     else:
         flash(f'{df_manifest_total_refuses_parcels} СО СТАТУСОМ ИЗЪЯТИЕ (НЕ ВЫПУЩЕНА!!!)', category='error')
@@ -1474,6 +1611,148 @@ def make_place_numb():
     return render_template('parcel_info_new_place.html')
 
 
+@app_svh.route('/making_new_place_sql', methods=['POST', 'GET'])
+def making_new_place_sql():
+    try:
+        parcel_numb, vector, audiofile, df_user_work = add_to_place_sql_service()
+        print(parcel_numb)
+    except:
+        flash(f'Посылка не найдена!', category='error')
+        print(str(traceback.format_exc()))
+        parcel_numb = None
+        vector = None
+        audiofile = 'Snd_CancelIssue.wav'
+        df_user_work = pd.DataFrame()
+    return render_template('parcel_info_new_place_sql.html', parcel_numb=parcel_numb, audiofile=audiofile,
+                           vector=vector, tables=[style + df_user_work.to_html(classes='mystyle', index=False,
+                                                                float_format='{:2,.2f}'.format)],
+                           titles=['na', '\n\nОтработанные:'])
+
+
+@app_svh.route('/delete_last_parcel_place_sql', methods=['POST', 'GET'])
+def delete_last_place_sql():
+    user_name, user_id = get_user_name()
+    con = sl.connect("BAZA.db")
+    with con:
+        df_add_to_place = pd.read_sql(
+            f"SELECT * FROM add_to_place where user_id = '{user_id}'",
+            con)
+        last_id = df_add_to_place['ID'].max()
+        con.execute(
+            f"DELETE FROM add_to_place where ID = '{last_id}'")
+        df_user_work = df_add_to_place.fillna('').sort_values(by='ID', ascending=False)
+
+        df_user_work['№'] = np.arange(len(df_user_work))[::-1] + 1
+        df_user_work = df_user_work[['№', 'parcel_numb', 'parcel_plomb_numb', 'custom_status_short', 'user_id']]
+        print(last_id)
+        object_name = last_id
+        comment = 'Сформировать место: удалена последняя запись'
+        insert_user_action(object_name, comment)
+    print('ok')
+    return render_template('parcel_info_new_place_sql.html',
+                           tables=[style + df_user_work.to_html(classes='mystyle', index=False,
+                                                                float_format='{:2,.2f}'.format)],
+                           titles=['na', '\n\nОтработанные:'])
+
+
+@app_svh.route('/add_to_place_button', methods=['POST', 'GET'])
+def add_to_place_button():
+    user_name, user_id = get_user_name()
+    parcel_plomb_numb = request.form['parcel_plomb_numb']
+    print(parcel_plomb_numb)
+    con = sl.connect("BAZA.db")
+    with con:
+        df_add_to_place = pd.read_sql(
+                    f"SELECT * FROM add_to_place where user_id = '{user_id}'",
+                    con)
+        for parcel_numb in df_add_to_place['parcel_numb']:
+            con.execute(
+                f"Update baza set parcel_plomb_numb = '{parcel_plomb_numb}',"
+                f"VH_status = 'Готово к отгрузке', "
+                f"zone = '' where parcel_numb = '{parcel_numb}'")
+
+            print(parcel_numb)
+        object_name = parcel_plomb_numb
+        comment = 'Сформировать место: сформированно новое место'
+        insert_user_action(object_name, comment)
+    qnt_df_add_to_place = len(df_add_to_place)
+    with con:
+        con.execute(
+            f"DELETE FROM add_to_place where user_id = '{user_id}'")
+    flash(f'Место {parcel_plomb_numb} сформированно, кол-во посылок: {qnt_df_add_to_place}', category='success')
+    #print('ok')
+    return render_template('parcel_info_new_place_sql.html')
+
+
+@app_svh.route('/create_zone', methods=['POST', 'GET'])
+def add_to_zone():
+    try:
+        parcel_numb, vector, audiofile, df_user_work = add_to_zone_service()
+        print(parcel_numb)
+    except:
+        flash(f'Посылка не найдена!', category='error')
+        print(str(traceback.format_exc()))
+        parcel_numb = None
+        vector = None
+        audiofile = 'Snd_CancelIssue.wav'
+        df_user_work = pd.DataFrame()
+    return render_template('parcel_info_new_zone.html', parcel_numb=parcel_numb, audiofile=audiofile,
+                           vector=vector, tables=[style + df_user_work.to_html(classes='mystyle', index=False,
+                                                                float_format='{:2,.2f}'.format)],
+                           titles=['na', '\n\nОтработанные:'])
+
+
+@app_svh.route('/delet_last_parcel_zone', methods=['POST', 'GET'])
+def delet_last_parcel_zone():
+    user_name, user_id = get_user_name()
+    con = sl.connect("BAZA.db")
+    with con:
+        df_add_to_zone = pd.read_sql(
+            f"SELECT * FROM add_to_zone where user_id = '{user_id}'",
+            con)
+        last_id = df_add_to_zone['ID'].max()
+        con.execute(
+            f"DELETE FROM add_to_zone where ID = '{last_id}'")
+        df_user_work = df_add_to_zone.fillna('').sort_values(by='ID', ascending=False)
+
+        df_user_work['№'] = np.arange(len(df_user_work))[::-1] + 1
+        df_user_work = df_user_work[['№', 'parcel_numb', 'zone', 'user_id']]
+        print(last_id)
+        object_name = last_id
+        comment = 'Сформировать зону хранения: удалена последняя запись'
+        insert_user_action(object_name, comment)
+    print('ok')
+    return render_template('parcel_info_new_zone.html',
+                           tables=[style + df_user_work.to_html(classes='mystyle', index=False,
+                                                                float_format='{:2,.2f}'.format)],
+                           titles=['na', '\n\nОтработанные:'])
+
+
+@app_svh.route('/add_to_zone_button', methods=['POST', 'GET'])
+def add_to_zone_button():
+    user_name, user_id = get_user_name()
+    zone = request.form['zone']
+    print(zone)
+    con = sl.connect("BAZA.db")
+    with con:
+        df_add_to_zone = pd.read_sql(
+                    f"SELECT * FROM add_to_zone where user_id = '{user_id}'",
+                    con)
+        for parcel_numb in df_add_to_zone['parcel_numb']:
+            con.execute(
+                f"Update baza set zone = '{zone}' where parcel_numb = '{parcel_numb}'")
+            print(parcel_numb)
+        qnt_df_add_to_zone = len(df_add_to_zone)
+        con.execute(
+            f"DELETE FROM add_to_zone where user_id = '{user_id}'")
+        object_name = zone
+        comment = f'Посылки размещенны в зоне {zone} в кол-ве: {qnt_df_add_to_zone}'
+        insert_user_action(object_name, comment)
+    flash(f'Посылки размещенны в зоне {zone} в кол-ве: {qnt_df_add_to_zone}', category='success')
+    #print('ok')
+    return render_template('parcel_info_new_zone.html')
+
+
 @app_svh.route('/modal')
 def modal():
     return render_template('modal.html')
@@ -1522,7 +1801,7 @@ def parc_info_to_xl():
         writer.sheets['Sheet1'].set_column(4, 3, 30)
         writer.sheets['Sheet1'].set_column(5, 3, 20)
     writer.save()
-    flash(f'Инфо по ппосылкам выгружена в excel!', category='success')
+    flash(f'Инфо по посылкам выгружена в excel!', category='success')
     object_name = ''
     comment = f'Инфо по ппосылкам выгружена в excel!'
     insert_user_action(object_name, comment)
@@ -1531,7 +1810,319 @@ def parc_info_to_xl():
                            titles=['na', 'ALL'])
 
 
+@app_svh.route('/api/get_decisions', methods=['GET', 'POST'])
+def load_decision_api():
+    server_request_events()
+    check_and_backup()
+    return render_template('index2.html')
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def tochina_prepare(parcel_numb, custom_status, refuse_reason, Event_date_chin, event_code):
+    track_codes = {
+                "ERT": "HCPR",
+                "RIC": "SHND",
+                "PCD": "SHND",
+                "HBA45": "HCCR",
+                "HBA44": "HCCR",
+                "HBA41": "HCGR",
+                "ASF5": "HCFK",
+                "CR": "RC",
+                "CR2": "RC",
+                "CR3": "RC",
+
+                }
+    track_chinees = {'HCPR': '延期放行', 'SHND': '需缴纳关税', 'HCCR': '护照无效', 'HCSM': '产品个人使用说明',
+                     'HCCP': '需提供产品说明书', 'HCGR': 'B2B（商品',
+                     'HCGS': 'B2B（数量', 'HCFK': '需提供付款凭证', 'HCRU': '需提供网址链接'}
+
+    try:
+        track_code = track_codes[event_code]
+        chines_custom_status = track_chinees[track_code]
+    except:
+        track_code = ''
+        chines_custom_status = ''
+    if event_code == 'IDOK':
+        chines_custom_status = '护照数据已被海关经纪人接受'
+    try:
+        decision_date = datetime.datetime.strftime(Event_date_chin, "%Y/%#m/%#d %H:%M")
+        if refuse_reason == 'nan':
+            refuse_reason = ''
+        else:
+            for key, item in track_codes.items():
+                if key in str.lower(refuse_reason):
+                    track_code = item
+                    break
+
+        if 'выпуск товаров' in str.lower(custom_status):
+            track_code = 'RC'
+        elif 'продление' in str.lower(custom_status):
+            track_code = 'HCPR'
+
+
+        for key, item in track_chinees.items():
+            if track_code != 'RC' and track_code == key:
+                refuse_reason = item + refuse_reason
+                break
+            if track_code == 'RC':
+                custom_status = custom_status + '放行'
+                break
+        if refuse_reason != '':
+            refuse_reason = refuse_reason + '. '
+        print(track_code)
+        print(f"{custom_status + refuse_reason}")
+        data = {"PostingNumber": f"{parcel_numb}", "TrackingNumber": f"{parcel_numb}",
+                "Data": [{"track_code": f"{track_code}", "datetime": f"{decision_date}", "location": "Россия",
+                          "description": f"{chines_custom_status} {custom_status + refuse_reason}"}]}
+        return data
+    except Exception as e:
+        logger_GBS_statuses.info(f'insert_event_API action faled: {parcel_numb}: {e}')
+
+
+def send_to_china(data):
+    try:
+        print(data)
+        data_str = str(data).replace("'", '"').replace(", ", ",")
+        m = hashlib.md5()
+        m.update(data_str.encode('utf-8'))
+        result = base64.urlsafe_b64encode(m.hexdigest().encode('utf-8')).decode(
+            'utf-8')  # b64encode(m.hexdigest().encode('utf-8'))
+        url = ("http://hccd.rtb56.com/webservice/edi/TrackService.ashx?code=ADDCUSTOMSCLEARANCETRACK"
+               + f'&data={data_str}' + f'&sign={str(result)}')
+        response = requests.get(url)
+        logger_GBS_statuses.info(f'insert_event_API action: {response.text}')
+        print(response.text)
+        print('ok')
+    except Exception as e:
+        logger_GBS_statuses.info(f'send_to_china faled: {data}: {e}')
+        pass
+
+
+delta = datetime.timedelta(hours=-10, minutes=0)
+
+
+def creating_pay_info_GBS(parcel_numb, Event_date_chin):
+
+    try:
+        expired_date = Event_date_chin + delta
+        expired_date = expired_date.strftime("%Y-%m-%d")
+        print(expired_date)
+        url = "http://hccd.rtb56.com/webservice/Ozon/OzonSavePayTaxData.ashx"
+        data = [
+            {
+                "posting_number": '',
+                "tracking_number": parcel_numb,
+                "pay_tax_end_time": expired_date,
+                "pay_tax_link": "https://gbs-broker.alta.ru/",
+                "tax_amount": '',
+                "is_paid": "N"
+            }
+        ]
+        response = requests.post(url=url, json=data)
+        print(response.text)
+        logger_GBS_statuses.info(f'{now} creating_pay_info OK: {parcel_numb}')
+        return "OK"
+    except Exception:
+        logger_GBS_statuses.info(f'{now} creating_pay_info faled: {str(traceback.format_exc())}')
+        return (str(traceback.format_exc()))
+
+
+def payresult_GBS(parcel_numb):
+    try:
+        url = 'http://hccd.rtb56.com/webservice/Ozon/OzonUpdatePayTaxData.ashx'
+        data = [
+            {
+                "tracking_number": f"{parcel_numb}",
+                "is_paid": "Y"
+            }
+        ]
+        response = requests.post(url=url, json=data)
+        logger_GBS_statuses.info(f'{now} pay result OK: {parcel_numb} {response.text}:')
+        return "OK"
+    except Exception:
+        logger_GBS_statuses.info(f'{now} pay_result faled: {str(traceback.format_exc())}')
+        return (str(traceback.format_exc()))
+
+
+def GBS_request_events():
+    con = sl.connect('BAZA.db')
+    len_id = con.execute('SELECT max(id) from baza').fetchone()[0]
+    print(len_id)
+    id_for_job = len_id - 5000000
+    print(id_for_job)
+    df = pd.read_sql(f"Select parcel_numb from baza "
+                     f"where party_numb LIKE '%URC%' "
+                     f"AND ID > {id_for_job} "  # where ID > (len(ID) - 200 000)
+                     f"AND custom_status_short = 'ИЗЪЯТИЕ' "
+                     f"AND custom_status != 'Return in process'", con).drop_duplicates(subset='parcel_numb')
+    print(df)
+    list_chanks = list(chunks(df['parcel_numb'], 25))
+    #print(list_chanks)
+    n = 0
+    for chank in list_chanks:
+        print(chank)
+        list_of_dicts = []
+        for i in chank:
+            json_parc = {"HWBRefNumber": i}
+            list_of_dicts.append(json_parc)
+        print(list_of_dicts)
+        print(len(list_of_dicts))
+        url = "https://api.gbs-broker.ru/"
+        body = {
+                 "jsonrpc": "2.0",
+                 "method": "get_events_public",
+                 "params": {
+                     "Filter": {
+                     "HWB": list_of_dicts
+
+                     },
+                     "TextLang": "ru"
+                     },
+
+                 "id": "c52f1b33-dg"
+                }
+        headers = {'Content-Type': 'application/json'}
+        try:
+            response = requests.post(url=url, json=body,  # http://164.132.182.145:5001
+                                 headers=headers)
+        except requests.exceptions.ConnectionError:
+            time.sleep(3)
+            response = requests.post(url=url, json=body,  # http://164.132.182.145:5001
+                                     headers=headers)
+
+        print(response)
+        json_events = response.json()
+        print(json_events)
+        code_mask = {"NW": "Получена информация об отправлении",
+                        "NWC": "Отменен",
+                        "CSW": "Отправлено на склад 1-ой мили.",
+                        "WA": "Принято на складе 1-ой мили.",
+                        "WD": "Убыло со склада 1-й мили.",
+                        "NWCFG": "Посылка отклонена перевозчиком, так как содержит запрещённые товары",
+                        "NWCFM": "Отменен на первой миле",
+                        "NWCHM": "Посылка отклонена перевозчиком, так как содержит опасные материалы",
+                        "ZX": "Обработано на складе перевозчика.",
+                        "ZC": "Готово к вылету в страну получателя.",
+                        "RS": "Покинуло страну происхождения",
+                        "AI": "Прибыло в страну назначения.",
+                        "CF1": "Отправление не прилетело",
+                        "CF3": "Товары изъяты таможенными органами",
+                        "CNP5": "Сбой информационной системы таможенных органов",
+                        "DS": "Задержка вылета.",
+                        "CT": "Таможенный транзит",
+                        "CI": "Прибыло на таможню.",
+                        "CR": "Выпущено таможенным органом.",
+                        "CR2": "Выпущено таможенным органом без платежей.",
+                        "CR3": "Выпущено таможенным органом с платежом.",
+                        "RSW": "Отправление готово к отгрузке со склада",
+                        "CO": "Убыло из таможни.",
+                        "PIB": "Товар поврежден (повреждение упаковки груза)",
+                        "RPC": "Отказ от уплаты таможенных платежей",
+                        "RPI": "Отказ от предоставления информации получателем",
+                        "ASF": "Проблема. Запрет от таможни или секюрити.",
+                        "ASF1": "Проблема. Товары не для личного пользования.",
+                        "ASF2": "Проблема. Ссылка на товар не рабочая.",
+                        "ASF3": "Проблема. Стоимость товара некорректна.",
+                        "ASF4": "Проблема. Необходимо подтверждение паспортных данных для таможни.",
+                        "ASF5": "Проблема. Запрос документов и сведений от таможенных органов.",
+                        "HBA": "Проблема. Задержано таможней.",
+                        "HBA41": "Отказ в выпуске. Не для личного пользования.",
+                        "HBA42": "Отказ в выпуске. Не предоставлены документы.",
+                        "HBA43": "Отказ в выпуске технического характера.",
+                        "HBA44": "Отказ в выпуске. Некорректные ПД.",
+                        "HBA45": "Отказ в выпуске. Недействительные ПД.",
+                        "HBA46": "Отказ в выпуске. Иное.",
+                        "ERT": "Продление срока выпуска.",
+                        "OH": "Временное хранение",
+                        "NOID": "Проблема. Нет паспортных данных в момент check in на таможне.",
+                        "IDOK": "Паспортные данные собраны",
+                        "DOCOK": "Документы для подачи в ТО представлены.",
+                        "IDCE": "Время для сбора паспортных данных истекло",
+                        "RIC": "Квитанция выставлена таможенным органом",
+                        "RPR": "Квитанция оплачена получателем",
+                        "PCD": "Отказ в выпуске(требуется уплата таможенных платежей)"}
+        result = json_events['result']
+        with con:
+            parcel_list = []
+            for parcel_slot in result:
+                try:
+                    parcel_numb = parcel_slot['HWBRefNumber']
+                    event = parcel_slot['events'][0]
+                    event_code = event['event_code']
+                    try:
+                        custom_status = code_mask[event_code]
+                    except:
+                        custom_status = event['event_text']
+                    events_all = parcel_slot['events']
+                    if 'clearance complete' in custom_status or 'Released by customs' in custom_status:
+                        custom_status_short = 'ВЫПУСК'
+                        decision_date = parcel_slot['events'][0]['event_time']
+                        refuse_reason = parcel_slot['events'][0]['event_comment']
+                    else:
+                        for event in events_all:
+                            if 'CR' in event['event_code'] or 'CR2' in event['event_code'] or 'CR3' in event[
+                                'event_code']:
+                                custom_status_short = 'ВЫПУСК'
+                                decision_date = event['event_time']
+                                refuse_reason = event['event_comment']
+                                break
+                            else:
+
+                                custom_status_short = 'ИЗЪЯТИЕ'
+                                decision_date = event['event_time']
+                                refuse_reason = event['event_comment']
+                                print(refuse_reason)
+
+                        # custom_status_short = 'ИЗЪЯТИЕ'
+
+                    con.execute(f"Update baza set "
+                                f" custom_status = '{custom_status}',"
+                                f" custom_status_short = '{custom_status_short}',"
+                                f" decision_date = '{decision_date}',"
+                                f" refuse_reason = '{refuse_reason}' where parcel_numb = '{parcel_numb}'")
+                    print('updated')
+                    Event_date_chin = datetime.datetime.strptime(decision_date, "%Y-%m-%dT%H:%M:%S")
+                    data = tochina_prepare(parcel_numb, custom_status, refuse_reason, Event_date_chin, event_code)
+                    send_to_china(data)
+
+                    if event_code == 'RIK':
+                        creating_pay_info_GBS(parcel_numb, Event_date_chin)
+                    if event_code == 'RPR':
+                        payresult_GBS(parcel_numb)
+                    decision_date = decision_date.replace('T', ' ')
+                    parcel_info = {"regnumber": '', "parcel_numb": parcel_numb,
+                                   "Event": custom_status, "Event_comment": refuse_reason,
+                                   "Event_date": decision_date}
+                    parcel_list.append(parcel_info)
+                except Exception as e:
+                    logger.warning(f'parcel_slot: {parcel_slot} - ERROR: {e}')
+
+        list_chunks_parc = list(chunks(parcel_list, 25))
+        print(list_chunks_parc)
+        i = 0
+        for chunk_parc in list_chunks_parc:
+            i += 1
+            print(f'chunk {i}')
+            response = requests.post('http://164.132.182.145:5000/api/add/new_event_chunks2', json=chunk_parc,
+                                     headers={'accept': 'application/json'})
+            print(response.text)
+
+        n += 25
+        print(n)
+
+
+scheduler = BackgroundScheduler(daemon=True)
+#Create the job
+
+scheduler.add_job(func=GBS_request_events, trigger='interval', seconds=10) #trigger='cron', hour='22', minute='30'
+scheduler.start()
+
 if __name__ == '__main__':
     app_svh.secret_key = 'c9e779a3258b42338334daaed51bccf7'
     app_svh.config['SESSION_TYPE'] = 'filesystem'
-    app_svh.run(host='0.0.0.0', port=5000, threaded=True, debug=True)  # cancel debug=True  and make threaded=True
+    serve(app_svh, host='0.0.0.0', port=5000, threads=4)

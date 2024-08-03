@@ -20,10 +20,6 @@ def get_plomb_come_work_service(party_numb):
         except Exception as e:
             print(e)
     con = sl.connect('BAZA.db')
-    df_not_custom = pd.read_excel('неподанные.xlsx', sheet_name=0, engine='openpyxl', header=None)
-    if df_not_custom[0].astype(str).str.contains(parcel_plomb_numb).any():
-        flash(f'НЕПОДАНА Пломба {parcel_plomb_numb} !!', category='error')
-        winsound.PlaySound('Snd\Snd_CancelIssue.wav', winsound.SND_FILENAME)
     with con:
         df_check_plomb = pd.read_sql(
             f"SELECT * FROM plombs where parcel_plomb_numb = '{parcel_plomb_numb}' COLLATE NOCASE", con)
